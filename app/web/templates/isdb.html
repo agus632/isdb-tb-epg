@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>ISDB-Tb - EPG</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="#">Mapeo</a>
+    <a href="#">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+
+</div>
+
+
+<div class="content">
+
+    <h1>Red ISDB-Tb</h1>
+
+    <p>
+        Configuración de redes y transport streams
+        utilizados por el generador EPG.
+    </p>
+
+
+    <div class="panel">
+
+        <h2>Agregar red</h2>
+
+        <form
+            method="post"
+            action="/isdb/network/add"
+        >
+
+            <label>Nombre</label>
+
+            <input
+                type="text"
+                name="name"
+                placeholder="Ej: Vallevisión"
+                required
+            >
+
+
+            <label>Network ID</label>
+
+            <input
+                type="number"
+                name="network_id"
+                min="0"
+                max="65535"
+                required
+            >
+
+
+            <label>Original Network ID</label>
+
+            <input
+                type="number"
+                name="original_network_id"
+                min="0"
+                max="65535"
+                required
+            >
+
+
+            <label>Código de país</label>
+
+            <input
+                type="text"
+                name="country_code"
+                value="ARG"
+                maxlength="3"
+                required
+            >
+
+
+            <label>Zona horaria</label>
+
+            <input
+                type="text"
+                name="timezone_name"
+                value="America/Argentina/Buenos_Aires"
+                required
+            >
+
+
+            <button type="submit">
+                Crear red
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>Redes configuradas</h2>
+
+        <table>
+
+            <thead>
+
+                <tr>
+                    <th>Nombre</th>
+                    <th>Network ID</th>
+                    <th>ONID</th>
+                    <th>País</th>
+                    <th>Zona horaria</th>
+                    <th>MUX</th>
+                    <th>Acciones</th>
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+            {% for network in networks %}
+
+                <tr>
+
+                    <td>
+                        <strong>
+                            {{ network.name }}
+                        </strong>
+                    </td>
+
+                    <td>
+                        {{ network.network_id }}
+                        <br>
+                        <small>
+                            0x{{ "%04X"|format(network.network_id) }}
+                        </small>
+                    </td>
+
+                    <td>
+                        {{ network.original_network_id }}
+                        <br>
+                        <small>
+                            0x{{ "%04X"|format(network.original_network_id) }}
+                        </small>
+                    </td>
+
+                    <td>
+                        {{ network.country_code }}
+                    </td>
+
+                    <td>
+                        {{ network.timezone }}
+                    </td>
+
+                    <td>
+                        {{ network.transport_streams|length }}
+                    </td>
+
+                    <td>
+
+                        <div class="actions">
+
+                            <a
+                                href="/isdb/network/{{ network.id }}"
+                                class="button-link"
+                            >
+                                Portadoras
+                            </a>
+
+                            <form
+                                method="post"
+                                action="/isdb/network/{{ network.id }}/delete"
+                                onsubmit="return confirm(
+                                    '¿Eliminar esta red y todas sus portadoras?'
+                                );"
+                            >
+
+                                <button
+                                    type="submit"
+                                    class="danger"
+                                >
+                                    Eliminar
+                                </button>
+
+                            </form>
+
+                        </div>
+
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+
+            {% if not networks %}
+
+                <tr>
+
+                    <td
+                        colspan="7"
+                        style="text-align:center;"
+                    >
+                        No hay redes ISDB-Tb configuradas.
+                    </td>
+
+                </tr>
+
+            {% endif %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+</body>
+</html>

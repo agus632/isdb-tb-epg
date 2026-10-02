@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        {{ network.name }} - ISDB-Tb
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+
+</head>
+
+
+<body>
+
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="/map">Mapeo</a>
+    <a href="/program">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+
+</div>
+
+
+<div class="content">
+
+    <a
+        href="/isdb"
+        class="back-link"
+    >
+        ← Volver a redes
+    </a>
+
+
+    <h1>
+        {{ network.name }}
+    </h1>
+
+
+    <div class="panel">
+
+        <h2>Información de red</h2>
+
+        <table>
+
+            <tr>
+                <th>Network ID</th>
+                <td>
+                    {{ network.network_id }}
+                    (0x{{ "%04X"|format(network.network_id) }})
+                </td>
+            </tr>
+
+            <tr>
+                <th>Original Network ID</th>
+                <td>
+                    {{ network.original_network_id }}
+                    (0x{{ "%04X"|format(network.original_network_id) }})
+                </td>
+            </tr>
+
+            <tr>
+                <th>País</th>
+                <td>
+                    {{ network.country_code }}
+                </td>
+            </tr>
+
+            <tr>
+                <th>Zona horaria</th>
+                <td>
+                    {{ network.timezone }}
+                </td>
+            </tr>
+
+        </table>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>Agregar portadora / MUX</h2>
+
+        <form
+            method="post"
+            action="/isdb/network/{{ network.id }}/mux/add"
+        >
+
+            <label>
+                Nombre
+            </label>
+
+            <input
+                type="text"
+                name="name"
+                placeholder="Ej: RF 21"
+                required
+            >
+
+
+            <label>
+                Transport Stream ID
+            </label>
+
+            <input
+                type="number"
+                name="transport_stream_id"
+                min="0"
+                max="65535"
+                required
+            >
+
+
+            <label>
+                Canal físico
+            </label>
+
+            <input
+                type="number"
+                name="physical_channel"
+                placeholder="Ej: 21"
+            >
+
+
+            <label>
+                Frecuencia (Hz)
+            </label>
+
+            <input
+                type="number"
+                name="frequency_hz"
+                placeholder="Ej: 515000000"
+            >
+
+
+            <label>
+                PID EIT
+            </label>
+
+            <input
+                type="text"
+                name="eit_pid"
+                value="0x0012"
+                required
+            >
+
+            <small>
+                Valor estándar para EIT: 0x0012
+            </small>
+
+            <br>
+
+            <button type="submit">
+                Agregar portadora
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>
+            Portadoras / Transport Streams
+        </h2>
+
+
+        <table>
+
+            <thead>
+
+                <tr>
+                    <th>Nombre</th>
+                    <th>TS ID</th>
+                    <th>Canal RF</th>
+                    <th>Frecuencia</th>
+                    <th>EIT PID</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+            {% for mux in transport_streams %}
+
+                <tr>
+
+                    <td>
+                        <strong>
+                            {{ mux.name }}
+                        </strong>
+                    </td>
+
+
+                    <td>
+
+                        {{ mux.transport_stream_id }}
+
+                        <br>
+
+                        <small>
+                            0x{{ "%04X"|format(
+                                mux.transport_stream_id
+                            ) }}
+                        </small>
+
+                    </td>
+
+
+                    <td>
+
+                        {% if mux.physical_channel is not none %}
+
+                            {{ mux.physical_channel }}
+
+                        {% else %}
+
+                            —
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        {% if mux.frequency_hz %}
+
+                            {{ "%.3f"|format(
+                                mux.frequency_hz / 1000000
+                            ) }} MHz
+
+                        {% else %}
+
+                            —
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        0x{{ "%04X"|format(mux.eit_pid) }}
+
+                    </td>
+
+
+                    <td>
+
+                        {% if mux.enabled %}
+
+                            <span class="status-ok">
+                                Activo
+                            </span>
+
+                        {% else %}
+
+                            <span class="status-off">
+                                Desactivado
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        <div class="actions">
+
+                            <form
+                                method="post"
+                                action="/isdb/mux/{{ mux.id }}/toggle"
+                            >
+
+                               <a
+                                   href="/isdb/mux/{{ mux.id }}"
+                                   class="button-link"
+                               >
+                                   Servicios
+                               </a>
+
+                                <button
+                                    type="submit"
+                                    class="secondary"
+                                >
+
+                                    {% if mux.enabled %}
+                                        Desactivar
+                                    {% else %}
+                                        Activar
+                                    {% endif %}
+
+                                </button>
+
+                            </form>
+
+
+                            <form
+                                method="post"
+                                action="/isdb/mux/{{ mux.id }}/delete"
+                                onsubmit="return confirm(
+                                    '¿Eliminar esta portadora?'
+                                );"
+                            >
+
+                                <button
+                                    type="submit"
+                                    class="danger"
+                                >
+                                    Eliminar
+                                </button>
+
+                            </form>
+
+                        </div>
+
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+
+            {% if not transport_streams %}
+
+                <tr>
+
+                    <td
+                        colspan="7"
+                        style="text-align:center;"
+                    >
+
+                        No hay portadoras configuradas.
+
+                    </td>
+
+                </tr>
+
+            {% endif %}
+
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+</body>
+</html>

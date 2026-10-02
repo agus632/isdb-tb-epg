@@ -1,0 +1,27 @@
+[Unit]
+Description=ISDB-Tb EPG System
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+WorkingDirectory=/opt/isdb-epg
+
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/isdb-epg/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8090
+
+Restart=always
+RestartSec=5
+
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

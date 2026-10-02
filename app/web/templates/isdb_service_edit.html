@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Editar {{ service.service_name }} - ISDB-Tb EPG
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="/map">Mapeo</a>
+    <a href="/program">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+
+</div>
+
+
+<div class="content">
+
+    <a
+        href="/isdb/mux/{{ mux.id }}"
+        class="back-link"
+    >
+        ← Volver a {{ mux.name }}
+    </a>
+
+
+    <h1>
+        Editar servicio
+    </h1>
+
+
+    {% if request.query_params.get("error") == "duplicate" %}
+
+        <div class="error-box">
+            Ya existe otro servicio con ese Service ID
+            dentro de esta portadora.
+        </div>
+
+    {% elif request.query_params.get("error") == "sid" %}
+
+        <div class="error-box">
+            Service ID inválido.
+        </div>
+
+    {% elif request.query_params.get("error") == "database" %}
+
+        <div class="error-box">
+            No se pudieron guardar los cambios.
+        </div>
+
+    {% endif %}
+
+
+    <div class="panel">
+
+        <h2>
+            {{ service.service_name }}
+        </h2>
+
+        <p>
+            Portadora:
+            <strong>{{ mux.name }}</strong>
+            · TSID {{ mux.transport_stream_id }}
+        </p>
+
+
+        <form
+            method="post"
+            action="/isdb/service/{{ service.id }}/edit"
+        >
+
+            <label>
+                Nombre del servicio
+            </label>
+
+            <input
+                type="text"
+                name="service_name"
+                value="{{ service.service_name }}"
+                required
+            >
+
+
+            <label>
+                Service ID / Program Number
+            </label>
+
+            <input
+                type="number"
+                name="new_service_id"
+                min="0"
+                max="65535"
+                value="{{ service.service_id }}"
+                required
+            >
+
+            <small>
+                Actual:
+                {{ service.service_id }}
+                (0x{{ "%04X"|format(service.service_id) }})
+            </small>
+
+
+            <label>
+                Service Type
+            </label>
+
+            <input
+                type="text"
+                name="service_type"
+                value="0x{{ '%02X'|format(service.service_type) }}"
+                required
+            >
+
+            <small>
+                Se acepta hexadecimal, por ejemplo 0x01.
+            </small>
+
+
+            <label>
+                Fuente EPG
+            </label>
+
+            <select
+                name="epg_source_id"
+                id="epg_source"
+            >
+
+                <option value="">
+                    Sin EPG
+                </option>
+
+                {% for source in sources %}
+
+                    <option
+                        value="{{ source.id }}"
+                        {% if service.epg_source_id == source.id %}
+                        selected
+                        {% endif %}
+                    >
+                        {{ source.name }}
+                    </option>
+
+                {% endfor %}
+
+            </select>
+
+
+            <label>
+                Buscar canal EPG
+            </label>
+
+            <input
+                type="text"
+                id="epg_search"
+                placeholder="Buscar canal..."
+                autocomplete="off"
+            >
+
+
+            <label>
+                Canal XMLTV / EPG
+            </label>
+
+            <select
+                name="epg_channel_id"
+                id="epg_channel"
+            >
+
+                {% if service.epg_channel %}
+
+                    <option
+                        value="{{ service.epg_channel.id }}"
+                        selected
+                    >
+                        {{ service.epg_channel.display_name }}
+                        [{{ service.epg_channel.xmltv_id }}]
+                    </option>
+
+                {% elif service.epg_source_id %}
+
+                    <option value="">
+                        Seleccione un canal
+                    </option>
+
+                {% else %}
+
+                    <option value="">
+                        Sin EPG
+                    </option>
+
+                {% endif %}
+
+            </select>
+
+
+            <div class="checkbox-group">
+
+                <label class="checkbox-label">
+
+                    <input
+                        type="checkbox"
+                        name="eit_present_following"
+                        {% if service.eit_present_following %}
+                        checked
+                        {% endif %}
+                    >
+
+                    EIT Present / Following
+
+                </label>
+
+
+                <label class="checkbox-label">
+
+                    <input
+                        type="checkbox"
+                        name="eit_schedule"
+                        {% if service.eit_schedule %}
+                        checked
+                        {% endif %}
+                    >
+
+                    EIT Schedule
+
+                </label>
+
+            </div>
+
+
+            <div class="actions">
+
+                <button type="submit">
+                    Guardar cambios
+                </button>
+
+                <button
+                    type="button"
+                    class="secondary"
+                    onclick="window.location.href='/isdb/mux/{{ mux.id }}'"
+                >
+                    Cancelar
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<script>
+
+const sourceSelect =
+    document.getElementById("epg_source");
+
+const searchInput =
+    document.getElementById("epg_search");
+
+const channelSelect =
+    document.getElementById("epg_channel");
+
+
+let searchTimer = null;
+
+
+async function loadChannels() {
+
+    const sourceId = sourceSelect.value;
+    const search = searchInput.value.trim();
+
+    channelSelect.innerHTML =
+        '<option value="">Buscando...</option>';
+
+    if (!sourceId) {
+
+        channelSelect.innerHTML =
+            '<option value="">Sin EPG</option>';
+
+        return;
+    }
+
+    try {
+
+        const params = new URLSearchParams({
+            source_id: sourceId,
+            q: search
+        });
+
+        const response = await fetch(
+            "/api/epg/channels?" + params.toString()
+        );
+
+        if (!response.ok) {
+            throw new Error("Error HTTP");
+        }
+
+        const channels = await response.json();
+
+        channelSelect.innerHTML =
+            '<option value="">Seleccione un canal</option>';
+
+        for (const channel of channels) {
+
+            const option =
+                document.createElement("option");
+
+            option.value = channel.id;
+
+            option.textContent =
+                channel.display_name +
+                " [" +
+                channel.xmltv_id +
+                "]";
+
+            channelSelect.appendChild(option);
+        }
+
+        if (channels.length === 0) {
+
+            channelSelect.innerHTML =
+                '<option value="">No se encontraron canales</option>';
+        }
+
+    } catch (error) {
+
+        channelSelect.innerHTML =
+            '<option value="">Error consultando canales</option>';
+    }
+}
+
+
+sourceSelect.addEventListener(
+    "change",
+    loadChannels
+);
+
+
+searchInput.addEventListener(
+    "input",
+    function () {
+
+        clearTimeout(searchTimer);
+
+        searchTimer = setTimeout(
+            loadChannels,
+            300
+        );
+    }
+);
+
+</script>
+
+</body>
+
+</html>

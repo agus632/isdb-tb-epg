@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Canales EPG - ISDB-Tb EPG
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+
+</head>
+
+
+<body>
+
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">
+        Dashboard
+    </a>
+
+    <a href="/sources">
+        Fuentes EPG
+    </a>
+
+    <hr>
+
+    <a href="/channels">
+        Canales
+    </a>
+
+    <a href="/map">
+        Mapeo
+    </a>
+
+    <a href="/program">
+        Programación
+    </a>
+
+    <a href="/isdb">
+        ISDB-Tb
+    </a>
+
+</div>
+
+
+<div class="content">
+
+    <h1>
+        Canales EPG
+    </h1>
+
+    <p>
+        Canales encontrados en las fuentes XMLTV configuradas.
+    </p>
+
+
+    <!-- BUSCADOR -->
+
+    <div class="panel">
+
+        <form
+            method="get"
+            action="/channels"
+            class="search-form"
+        >
+
+            <div>
+
+                <label for="q">
+                    Buscar
+                </label>
+
+                <input
+                    id="q"
+                    type="text"
+                    name="q"
+                    value="{{ q }}"
+                    placeholder="Nombre o ID XMLTV"
+                >
+
+            </div>
+
+
+            <div>
+
+                <label for="source_id">
+                    Fuente
+                </label>
+
+                <select
+                    id="source_id"
+                    name="source_id"
+                >
+
+                    <option value="">
+                        Todas las fuentes
+                    </option>
+
+                    {% for source in sources %}
+
+                    <option
+                        value="{{ source.id }}"
+
+                        {% if selected_source == source.id %}
+                        selected
+                        {% endif %}
+                    >
+
+                        {{ source.name }}
+
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+            <div class="search-button">
+
+                <button type="submit">
+                    Buscar
+                </button>
+
+            </div>
+
+
+            <div class="search-button">
+
+                <a
+                    href="/channels"
+                    class="button-link secondary"
+                >
+                    Limpiar
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+
+    <!-- RESULTADOS -->
+
+    <div class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Canales
+            </h2>
+
+            <span>
+                {{ total }} encontrados
+            </span>
+
+        </div>
+
+
+        <table>
+
+            <thead>
+
+                <tr>
+
+                    <th>
+                        Logo
+                    </th>
+
+                    <th>
+                        Canal
+                    </th>
+
+                    <th>
+                        ID XMLTV
+                    </th>
+
+                    <th>
+                        Fuente
+                    </th>
+
+                    <th>
+                        Acción
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+
+            {% for channel in channels %}
+
+                <tr>
+
+                    <td>
+
+                        {% if channel.icon_url %}
+
+                        <img
+                            src="{{ channel.icon_url }}"
+                            class="channel-logo"
+                            alt=""
+                            loading="lazy"
+                        >
+
+                        {% else %}
+
+                        <span class="no-logo">
+                            —
+                        </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        <strong>
+                            {{ channel.display_name }}
+                        </strong>
+
+                    </td>
+
+
+                    <td>
+
+                        <code>
+                            {{ channel.xmltv_id }}
+                        </code>
+
+                    </td>
+
+
+                    <td>
+
+                        {{ channel.source.name }}
+
+                    </td>
+
+
+                    <td>
+
+                        <a
+                            href="/channels/{{ channel.id }}"
+                            class="button-link"
+                        >
+                            Ver programación
+                        </a>
+
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+
+            {% if not channels %}
+
+                <tr>
+
+                    <td
+                        colspan="5"
+                        style="text-align:center;"
+                    >
+
+                        No se encontraron canales.
+
+                    </td>
+
+                </tr>
+
+            {% endif %}
+
+
+            </tbody>
+
+        </table>
+
+
+        <!-- PAGINACIÓN -->
+
+        {% if total_pages > 1 %}
+
+        <div class="pagination">
+
+            {% if page > 1 %}
+
+            <a
+                href="/channels?page={{ page - 1 }}&q={{ q }}{% if selected_source %}&source_id={{ selected_source }}{% endif %}"
+                class="button-link secondary"
+            >
+                ← Anterior
+            </a>
+
+            {% endif %}
+
+
+            <span>
+
+                Página
+                <strong>{{ page }}</strong>
+                de
+                <strong>{{ total_pages }}</strong>
+
+            </span>
+
+
+            {% if page < total_pages %}
+
+            <a
+                href="/channels?page={{ page + 1 }}&q={{ q }}{% if selected_source %}&source_id={{ selected_source }}{% endif %}"
+                class="button-link"
+            >
+                Siguiente →
+            </a>
+
+            {% endif %}
+
+        </div>
+
+        {% endif %}
+
+
+    </div>
+
+</div>
+
+
+</body>
+
+</html>

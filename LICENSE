@@ -1,0 +1,134 @@
+ISDB-Tb EPG Generator License 1.0
+
+Copyright (c) 2026
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files
+(the "Software"), to use, copy, study, modify, and redistribute the
+Software, subject to the following conditions:
+
+1. PERMITTED USE
+
+The Software may be used free of charge for personal, educational,
+research, broadcasting, telecommunications, Internet service provider,
+cable television, engineering, laboratory, and other internal purposes.
+
+Use of the Software within a commercial company or organization is
+expressly permitted, including production use.
+
+No license fee or royalty is required for such use.
+
+2. MODIFICATION
+
+The Software may be modified, adapted, extended, or integrated with
+other systems for permitted uses under this License.
+
+Modified versions remain subject to the restrictions of this License
+when redistributed.
+
+3. FREE REDISTRIBUTION
+
+The Software and modified versions of the Software may be redistributed
+provided that:
+
+a. no license, purchase, rental, subscription, or access fee is charged
+   for the Software itself;
+
+b. this copyright notice and this License are included with the
+   redistributed Software; and
+
+c. the restrictions contained in this License remain applicable.
+
+4. PROHIBITION ON SALE AND RENTAL
+
+The Software, whether modified or unmodified, may not be:
+
+a. sold as a software product;
+
+b. rented or leased;
+
+c. sublicensed for a fee;
+
+d. included as a paid software product where payment grants the right
+   to use the Software;
+
+e. offered as a paid hosted service, Software-as-a-Service (SaaS),
+   subscription service, rental platform, or other service in which
+   customers are charged for access to or use of the Software itself.
+
+5. PROFESSIONAL SERVICES
+
+This License does not prohibit charging for professional services
+related to the Software.
+
+Permitted paid professional services include, but are not limited to:
+
+- installation;
+- configuration;
+- systems integration;
+- customization;
+- development of integrations;
+- deployment;
+- training;
+- maintenance;
+- troubleshooting; and
+- technical support.
+
+Charging for these professional services does not grant the service
+provider the right to sell, rent, sublicense, or charge for access to
+the Software itself.
+
+6. COMMERCIAL ORGANIZATIONS
+
+A commercial organization may freely install and use the Software for
+its own internal operations, including revenue-generating broadcasting,
+telecommunications, ISP, cable television, and related operations.
+
+The fact that the organization conducts commercial activities does not
+by itself constitute commercial resale of the Software.
+
+The restrictions in this License apply to commercialization of the
+Software itself, not to the commercial activities performed by an
+organization using the Software internally.
+
+7. COPYRIGHT AND LICENSE NOTICE
+
+This copyright notice and this License shall be included in all copies
+or substantial portions of the Software that are redistributed.
+
+8. NO TRADEMARK LICENSE
+
+This License does not grant permission to use the names, logos,
+trademarks, or service marks of the copyright holder to advertise,
+endorse, or promote derived products or services without separate
+permission.
+
+9. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+10. TERMINATION
+
+Any rights granted under this License automatically terminate for any
+person or organization that violates its terms.
+
+Upon termination, that person or organization must cease distribution,
+sale, rental, sublicensing, or paid hosted access that violates this
+License.
+
+11. NATURE OF THIS LICENSE
+
+This is a source-available license with restrictions on commercial
+resale, rental, sublicensing, and paid hosted access.
+
+It is not intended to qualify as an Open Source Initiative (OSI)
+approved open-source license.
+
+Use of the Software signifies acceptance of these terms.

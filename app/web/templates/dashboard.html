@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ISDB-Tb EPG</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="/map">Mapeo</a>
+    <a href="/program">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+
+</div>
+
+
+<div class="content">
+
+    <h1>Dashboard</h1>
+
+    <div class="cards">
+
+        <div class="card">
+            <h3>Fuentes EPG</h3>
+
+            <div class="number">
+                {{ sources|length }}
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Canales</h3>
+
+            <div class="number">
+                0
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Programas</h3>
+
+            <div class="number">
+                0
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

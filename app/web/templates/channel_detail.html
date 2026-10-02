@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        {{ channel.display_name }} - EPG
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+
+</head>
+
+
+<body>
+
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">
+        Dashboard
+    </a>
+
+    <a href="/sources">
+        Fuentes EPG
+    </a>
+
+    <hr>
+
+    <a href="/channels">
+        Canales
+    </a>
+
+    <a href="/map">
+        Mapeo
+    </a>
+
+    <a href="/program">
+        Programación
+    </a>
+
+    <a href="/isdb">
+        ISDB-Tb
+    </a>
+
+</div>
+
+
+<div class="content">
+
+
+    <a
+        href="/channels"
+        class="back-link"
+    >
+        ← Volver a canales
+    </a>
+
+
+    <div class="channel-header">
+
+        {% if channel.icon_url %}
+
+        <img
+            src="{{ channel.icon_url }}"
+            class="channel-logo-large"
+            alt=""
+        >
+
+        {% endif %}
+
+
+        <div>
+
+            <h1>
+                {{ channel.display_name }}
+            </h1>
+
+            <p>
+
+                ID XMLTV:
+
+                <code>
+                    {{ channel.xmltv_id }}
+                </code>
+
+            </p>
+
+            <p>
+
+                Fuente:
+
+                <strong>
+                    {{ channel.source.name }}
+                </strong>
+
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>
+            Próxima programación
+        </h2>
+
+
+        <table>
+
+            <thead>
+
+                <tr>
+
+                    <th>
+                        Inicio UTC
+                    </th>
+
+                    <th>
+                        Fin UTC
+                    </th>
+
+                    <th>
+                        Programa
+                    </th>
+
+                    <th>
+                        Categoría
+                    </th>
+
+                    <th>
+                        Descripción
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+
+            {% for programme in programmes %}
+
+                <tr>
+
+                    <td class="date-cell">
+
+                        {{ programme.start_time.strftime(
+                            "%d/%m/%Y %H:%M"
+                        ) }}
+
+                    </td>
+
+
+                    <td class="date-cell">
+
+                        {% if programme.stop_time %}
+
+                            {{ programme.stop_time.strftime(
+                                "%d/%m/%Y %H:%M"
+                            ) }}
+
+                        {% else %}
+
+                            —
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        <strong>
+                            {{ programme.title }}
+                        </strong>
+
+                        {% if programme.subtitle %}
+
+                        <br>
+
+                        <small>
+                            {{ programme.subtitle }}
+                        </small>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        {% if programme.category %}
+
+                            {{ programme.category }}
+
+                        {% else %}
+
+                            —
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td class="description-cell">
+
+                        {% if programme.description %}
+
+                            {{ programme.description }}
+
+                        {% else %}
+
+                            —
+
+                        {% endif %}
+
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+
+            {% if not programmes %}
+
+                <tr>
+
+                    <td
+                        colspan="5"
+                        style="text-align:center;"
+                    >
+
+                        No hay programación futura
+                        disponible para este canal.
+
+                    </td>
+
+                </tr>
+
+            {% endif %}
+
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+</div>
+
+
+</body>
+
+</html>

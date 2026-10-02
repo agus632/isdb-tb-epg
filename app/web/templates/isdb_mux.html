@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        {{ mux.name }} - Servicios ISDB-Tb
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="/map">Mapeo</a>
+    <a href="/program">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+
+</div>
+
+
+<div class="content">
+
+    <a
+        href="/isdb/network/{{ network.id }}"
+        class="back-link"
+    >
+        ← Volver a portadoras
+    </a>
+
+
+    <h1>
+        {{ mux.name }}
+    </h1>
+
+
+    <div class="panel">
+
+        <h2>Transport Stream</h2>
+
+        <table>
+
+            <tr>
+                <th>Red</th>
+                <td>
+                    {{ network.name }}
+                </td>
+            </tr>
+
+            <tr>
+                <th>Original Network ID</th>
+                <td>
+                    {{ network.original_network_id }}
+                    (0x{{ "%04X"|format(
+                        network.original_network_id
+                    ) }})
+                </td>
+            </tr>
+
+            <tr>
+                <th>Transport Stream ID</th>
+                <td>
+                    {{ mux.transport_stream_id }}
+                    (0x{{ "%04X"|format(
+                        mux.transport_stream_id
+                    ) }})
+                </td>
+            </tr>
+
+            <tr>
+                <th>Canal RF</th>
+                <td>
+                    {{ mux.physical_channel or "—" }}
+                </td>
+            </tr>
+
+            <tr>
+                <th>EIT PID</th>
+                <td>
+                    0x{{ "%04X"|format(mux.eit_pid) }}
+                </td>
+            </tr>
+
+        </table>
+
+    </div>
+
+
+    <div class="panel">
+
+<div class="panel">
+
+    <h2>Configuración EIT</h2>
+
+    <form
+        method="post"
+        action="/isdb/mux/{{ mux.id }}/eit/config"
+    >
+
+        <label>
+            PID EIT
+        </label>
+
+        <input
+            type="text"
+            value="0x{{ '%04X'|format(mux.eit_pid) }}"
+            disabled
+        >
+
+        <small>
+            Configurado en la portadora.
+            Valor estándar: 0x0012.
+        </small>
+
+
+        <label>
+            Versión EIT
+        </label>
+
+        <input
+            type="number"
+            name="eit_version"
+            min="0"
+            max="31"
+            value="{{ mux.eit_version }}"
+            required
+        >
+
+
+        <label>
+            Días de Schedule
+        </label>
+
+        <input
+            type="number"
+            name="eit_schedule_days"
+            min="1"
+            max="64"
+            value="{{ mux.eit_schedule_days }}"
+            required
+        >
+
+
+        <label>
+            Idioma
+        </label>
+
+        <input
+            type="text"
+            name="eit_language"
+            maxlength="3"
+            value="{{ mux.eit_language }}"
+            required
+        >
+
+        <small>
+            ISO 639. Para español: spa
+        </small>
+
+
+        <label>
+            Running Status para evento actual
+        </label>
+
+        <select name="eit_running_status">
+
+            {% for value, name in [
+                (0, "0 - Undefined"),
+                (1, "1 - Not running"),
+                (2, "2 - Starts in a few seconds"),
+                (3, "3 - Pausing"),
+                (4, "4 - Running"),
+                (5, "5 - Service off-air")
+            ] %}
+
+                <option
+                    value="{{ value }}"
+                    {% if mux.eit_running_status == value %}
+                        selected
+                    {% endif %}
+                >
+                    {{ name }}
+                </option>
+
+            {% endfor %}
+
+        </select>
+
+
+        <div class="checkbox-group">
+
+            <label class="checkbox-label">
+
+                <input
+                    type="checkbox"
+                    name="eit_free_ca_mode"
+                    {% if mux.eit_free_ca_mode %}
+                        checked
+                    {% endif %}
+                >
+
+                Free CA Mode
+
+            </label>
+
+
+            <label class="checkbox-label">
+
+                <input
+                    type="checkbox"
+                    name="eit_extended_description"
+                    {% if mux.eit_extended_description %}
+                        checked
+                    {% endif %}
+                >
+
+                Descripción extendida
+
+            </label>
+
+        </div>
+
+
+        <button type="submit">
+            Guardar configuración EIT
+        </button>
+
+    </form>
+
+</div>
+
+
+<div class="panel">
+
+    <h2>Generador EIT</h2>
+
+    <p>
+        Genera Present/Following y Schedule
+        para todos los servicios activos
+        de esta portadora.
+    </p>
+
+
+    {% if request.query_params.get("eit_generated") %}
+
+        <div class="success-box">
+
+            <strong>
+                EIT generada correctamente
+            </strong>
+
+            <p>
+                P/F:
+                {{ request.query_params.get("pf") }}
+                secciones
+            </p>
+
+            <p>
+                Schedule:
+                {{ request.query_params.get("schedule") }}
+                secciones
+            </p>
+
+            <p>
+                Eventos Schedule:
+                {{ request.query_params.get("events") }}
+            </p>
+
+            <p>
+                Paquetes TS:
+                {{ request.query_params.get("packets") }}
+            </p>
+
+        </div>
+
+    {% endif %}
+
+
+    {% if request.query_params.get("eit_error") %}
+
+        <div class="error-box">
+
+            Error generando EIT.
+            Revisar la consola de Uvicorn.
+
+        </div>
+
+    {% endif %}
+
+
+    <form
+        method="post"
+        action="/isdb/mux/{{ mux.id }}/eit/generate"
+    >
+
+        <button type="submit">
+            Generar EIT
+        </button>
+
+    </form>
+
+</div>
+
+<div class="panel">
+    <h2>Transmisión EIT</h2>
+
+    <form
+        method="post"
+        action="/isdb/mux/{{ mux.id }}/eit/broadcast-config"
+    >
+
+        <div class="form-grid">
+
+            <div>
+                <label>
+                    Intervalo P/F
+                </label>
+
+                <input
+                    type="number"
+                    name="eit_pf_interval"
+                    min="1"
+                    value="{{ mux.eit_pf_interval or 2 }}"
+                    required
+                >
+
+                <small>
+                    segundos
+                </small>
+            </div>
+
+            <div>
+                <label>
+                    Schedule prime
+                </label>
+
+                <input
+                    type="number"
+                    name="eit_schedule_prime_interval"
+                    min="1"
+                    value="{{ mux.eit_schedule_prime_interval or 10 }}"
+                    required
+                >
+
+                <small>
+                    segundos
+                </small>
+            </div>
+
+            <div>
+                <label>
+                    Schedule later
+                </label>
+
+                <input
+                    type="number"
+                    name="eit_schedule_later_interval"
+                    min="1"
+                    value="{{ mux.eit_schedule_later_interval or 30 }}"
+                    required
+                >
+
+                <small>
+                    segundos
+                </small>
+            </div>
+
+            <div>
+                <label>
+                    Período prime
+                </label>
+
+                <input
+                    type="number"
+                    name="eit_prime_days"
+                    min="1"
+                    max="64"
+                    value="{{ mux.eit_prime_days or 8 }}"
+                    required
+                >
+
+                <small>
+                    días
+                </small>
+            </div>
+
+            <div>
+                <label>
+                    Salida
+                </label>
+
+                <select
+                    name="eit_output_mode"
+                >
+                    <option
+                        value="none"
+                        {% if mux.eit_output_mode == "none" %}
+                        selected
+                        {% endif %}
+                    >
+                        Desactivada
+                    </option>
+
+                    <option
+                        value="file"
+                        {% if mux.eit_output_mode == "file" %}
+                        selected
+                        {% endif %}
+                    >
+                        Archivo
+                    </option>
+
+                    <option
+                        value="udp"
+                        {% if mux.eit_output_mode == "udp" %}
+                        selected
+                        {% endif %}
+                    >
+                        UDP
+                    </option>
+                </select>
+            </div>
+
+            <div>
+                <label>
+                    Dirección UDP
+                </label>
+
+                <input
+                    type="text"
+                    name="eit_output_address"
+                    value="{{ mux.eit_output_address or '239.255.0.1' }}"
+                    required
+                >
+            </div>
+
+            <div>
+                <label>
+                    Puerto UDP
+                </label>
+
+                <input
+                    type="number"
+                    name="eit_output_port"
+                    min="1"
+                    max="65535"
+                    value="{{ mux.eit_output_port or 5000 }}"
+                    required
+                >
+            </div>
+
+            <div>
+                <label>
+                    Multicast TTL
+                </label>
+
+                <input
+                    type="number"
+                    name="eit_output_ttl"
+                    min="1"
+                    max="255"
+                    value="{{ mux.eit_output_ttl or 1 }}"
+                    required
+                >
+            </div>
+
+            <div>
+                <label>
+                    Interfaz / IP origen
+                </label>
+
+                <input
+                    type="text"
+                    name="eit_output_interface"
+                    value="{{ mux.eit_output_interface or '' }}"
+                    placeholder="Ej: 10.0.0.10"
+                >
+            </div>
+
+        </div>
+
+        <button type="submit">
+            Guardar transmisión EIT
+        </button>
+
+    </form>
+</div>
+
+        <h2>Agregar servicio</h2>
+
+        <form
+            method="post"
+            action="/isdb/mux/{{ mux.id }}/service/add"
+        >
+
+            <label>
+                Nombre del servicio
+            </label>
+
+            <input
+                type="text"
+                name="service_name"
+                placeholder="Ej: A24"
+                required
+            >
+
+
+            <label>
+                Service ID / Program Number
+            </label>
+
+            <input
+                type="number"
+                name="service_id"
+                min="0"
+                max="65535"
+                required
+            >
+
+
+            <label>
+                Service Type
+            </label>
+
+            <input
+                type="text"
+                name="service_type"
+                value="0x01"
+                required
+            >
+
+            <small>
+                Se acepta hexadecimal, por ejemplo 0x01.
+            </small>
+
+
+            <label>
+                Fuente EPG
+            </label>
+
+            <select
+                name="epg_source_id"
+                id="epg_source"
+            >
+
+                <option value="">
+                    Sin EPG
+                </option>
+
+                {% for source in sources %}
+
+                    <option value="{{ source.id }}">
+                        {{ source.name }}
+                    </option>
+
+                {% endfor %}
+
+            </select>
+
+
+            <label>
+                Buscar canal EPG
+            </label>
+
+            <input
+                type="text"
+                id="epg_search"
+                placeholder="Ej: A24"
+                autocomplete="off"
+            >
+
+
+            <label>
+                Canal XMLTV
+            </label>
+
+            <select
+                name="epg_channel_id"
+                id="epg_channel"
+            >
+
+                <option value="">
+                    Seleccione una fuente y busque un canal
+                </option>
+
+            </select>
+
+
+            <div class="checkbox-group">
+
+                <label class="checkbox-label">
+
+                    <input
+                        type="checkbox"
+                        name="eit_present_following"
+                        checked
+                    >
+
+                    EIT Present / Following
+
+                </label>
+
+
+                <label class="checkbox-label">
+
+                    <input
+                        type="checkbox"
+                        name="eit_schedule"
+                        checked
+                    >
+
+                    EIT Schedule
+
+                </label>
+
+            </div>
+
+
+            <button type="submit">
+                Crear servicio
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>
+            Servicios configurados
+        </h2>
+
+        <table>
+
+            <thead>
+
+                <tr>
+                    <th>Service ID</th>
+                    <th>Nombre</th>
+                    <th>Tipo</th>
+                    <th>EPG</th>
+                    <th>P/F</th>
+                    <th>Schedule</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+            {% for service in services %}
+
+                <tr>
+
+                    <td>
+
+                        {{ service.service_id }}
+
+                        <br>
+
+                        <small>
+                            0x{{ "%04X"|format(
+                                service.service_id
+                            ) }}
+                        </small>
+
+                    </td>
+
+
+                    <td>
+                        <strong>
+                            {{ service.service_name }}
+                        </strong>
+                    </td>
+
+
+                    <td>
+                        0x{{ "%02X"|format(
+                            service.service_type
+                        ) }}
+                    </td>
+
+
+                    <td>
+
+                        {% if service.epg_channel %}
+
+                            <strong>
+                                {{ service.epg_channel.display_name }}
+                            </strong>
+
+                            <br>
+
+                            <small>
+                                {{ service.epg_source.name }}
+                            </small>
+
+                            <br>
+
+                            <code>
+                                {{ service.epg_channel.xmltv_id }}
+                            </code>
+
+                        {% else %}
+
+                            <span class="status-off">
+                                Sin EPG
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        {% if service.eit_present_following %}
+
+                            <span class="status-ok">
+                                Sí
+                            </span>
+
+                        {% else %}
+
+                            —
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        {% if service.eit_schedule %}
+
+                            <span class="status-ok">
+                                Sí
+                            </span>
+
+                        {% else %}
+
+                            —
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        {% if service.enabled %}
+
+                            <span class="status-ok">
+                                Activo
+                            </span>
+
+                        {% else %}
+
+                            <span class="status-off">
+                                Desactivado
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        <div class="actions">
+
+                            <button
+                                type="button"
+                                class="secondary"
+                                onclick="window.location.href='/isdb/service/{{ service.id }}/edit'"
+                            >
+                                Editar
+                            </button>
+
+                            <form
+                                method="post"
+                                action="/isdb/service/{{ service.id }}/toggle"
+                            >
+
+                                <button
+                                    type="submit"
+                                    class="secondary"
+                                >
+
+                                    {% if service.enabled %}
+                                        Desactivar
+                                    {% else %}
+                                        Activar
+                                    {% endif %}
+
+                                </button>
+
+                            </form>
+
+
+                            <form
+                                method="post"
+                                action="/isdb/service/{{ service.id }}/delete"
+                                onsubmit="return confirm(
+                                    '¿Eliminar este servicio?'
+                                );"
+                            >
+
+                                <button
+                                    type="submit"
+                                    class="danger"
+                                >
+                                    Eliminar
+                                </button>
+
+                            </form>
+
+                        </div>
+
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+
+            {% if not services %}
+
+                <tr>
+
+                    <td
+                        colspan="8"
+                        style="text-align:center;"
+                    >
+                        No hay servicios configurados.
+                    </td>
+
+                </tr>
+
+            {% endif %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+<script>
+
+const sourceSelect =
+    document.getElementById("epg_source");
+
+const searchInput =
+    document.getElementById("epg_search");
+
+const channelSelect =
+    document.getElementById("epg_channel");
+
+
+let searchTimer = null;
+
+
+async function loadChannels() {
+
+    const sourceId = sourceSelect.value;
+    const search = searchInput.value.trim();
+
+    channelSelect.innerHTML =
+        '<option value="">Buscando...</option>';
+
+    if (!sourceId) {
+
+        channelSelect.innerHTML =
+            '<option value="">Seleccione una fuente EPG</option>';
+
+        return;
+    }
+
+    try {
+
+        const params = new URLSearchParams({
+            source_id: sourceId,
+            q: search
+        });
+
+        const response = await fetch(
+            "/api/epg/channels?" + params.toString()
+        );
+
+        if (!response.ok) {
+            throw new Error("Error HTTP");
+        }
+
+        const channels = await response.json();
+
+        channelSelect.innerHTML =
+            '<option value="">Seleccione un canal</option>';
+
+        for (const channel of channels) {
+
+            const option =
+                document.createElement("option");
+
+            option.value = channel.id;
+
+            option.textContent =
+                channel.display_name +
+                " [" +
+                channel.xmltv_id +
+                "]";
+
+            channelSelect.appendChild(option);
+        }
+
+        if (channels.length === 0) {
+
+            channelSelect.innerHTML =
+                '<option value="">No se encontraron canales</option>';
+
+        }
+
+    } catch (error) {
+
+        channelSelect.innerHTML =
+            '<option value="">Error consultando canales</option>';
+
+    }
+
+}
+
+
+sourceSelect.addEventListener(
+    "change",
+    loadChannels
+);
+
+
+searchInput.addEventListener(
+    "input",
+    function () {
+
+        clearTimeout(searchTimer);
+
+        searchTimer = setTimeout(
+            loadChannels,
+            300
+        );
+
+    }
+);
+
+</script>
+
+
+</body>
+</html>

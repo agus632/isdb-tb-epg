@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Fuentes EPG - ISDB-Tb EPG</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+</head>
+
+<body>
+
+<!-- ===================================================== -->
+<!-- SIDEBAR                                               -->
+<!-- ===================================================== -->
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="/map">Mapeo</a>
+    <a href="/program">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- CONTENIDO                                             -->
+<!-- ===================================================== -->
+
+<div class="content">
+
+    <h1>Fuentes EPG</h1>
+
+    <p>
+        Administrá las fuentes XMLTV utilizadas para obtener
+        la programación de los canales.
+    </p>
+
+
+    <!-- ================================================= -->
+    <!-- AGREGAR FUENTE                                    -->
+    <!-- ================================================= -->
+
+    <div class="panel">
+
+        <h2>Agregar fuente EPG</h2>
+
+        <form
+            method="post"
+            action="/sources/add"
+        >
+
+            <label for="name">
+                Nombre
+            </label>
+
+            <input
+                id="name"
+                type="text"
+                name="name"
+                placeholder="Ej: FreeEPG Argentina"
+                required
+            >
+
+
+            <label for="url">
+                URL XMLTV
+            </label>
+
+            <input
+                id="url"
+                type="url"
+                name="url"
+                placeholder="https://servidor/epg.xml.gz"
+                required
+            >
+
+
+            <label for="update_interval">
+                Actualizar cada (horas)
+            </label>
+
+            <input
+                id="update_interval"
+                type="number"
+                name="update_interval"
+                value="6"
+                min="1"
+                max="168"
+                required
+            >
+
+
+            <button type="submit">
+                Agregar fuente
+            </button>
+
+        </form>
+
+    </div>
+
+
+
+
+    <!-- ================================================= -->
+    <!-- AGREGAR EPG MANUAL                               -->
+    <!-- ================================================= -->
+
+    <div class="panel">
+
+        <h2>Agregar EPG manual</h2>
+
+        <p>
+            Para señales que no disponen de una fuente EPG.
+            El sistema generará automáticamente programación
+            continua utilizando el nombre del canal.
+        </p>
+
+        <form
+            method="post"
+            action="/sources/manual/add"
+        >
+
+            <label for="manual_name">
+                Nombre del canal
+            </label>
+
+            <input
+                id="manual_name"
+                type="text"
+                name="name"
+                placeholder="Ej: Canal Local HD"
+                required
+            >
+
+
+            <label for="manual_days">
+                Días de programación
+            </label>
+
+            <input
+                id="manual_days"
+                type="number"
+                name="days"
+                value="8"
+                min="1"
+                max="64"
+                required
+            >
+
+
+            <label for="manual_block_hours">
+                Duración de cada bloque (horas)
+            </label>
+
+            <input
+                id="manual_block_hours"
+                type="number"
+                name="block_hours"
+                value="6"
+                min="1"
+                max="24"
+                required
+            >
+
+
+            <button type="submit">
+                Crear EPG manual
+            </button>
+
+        </form>
+
+    </div>
+
+    <!-- ================================================= -->
+    <!-- FUENTES CONFIGURADAS                              -->
+    <!-- ================================================= -->
+
+    <div class="panel">
+
+        <h2>Fuentes configuradas</h2>
+
+        <table>
+
+            <thead>
+
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Tipo</th>
+                    <th>Intervalo</th>
+                    <th>Canales</th>
+                    <th>Programas</th>
+                    <th>Estado</th>
+                    <th>Última actualización</th>
+                    <th>Acciones</th>
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+                {% for source in sources %}
+
+                <tr>
+
+                    <!-- ID -->
+                    <td>
+                        {{ source.id }}
+                    </td>
+
+
+                    <!-- Nombre -->
+                    <td>
+
+                        <strong>
+                            {{ source.name }}
+                        </strong>
+
+                        {% if source.last_message %}
+
+                        <br>
+
+                        <small>
+                            {{ source.last_message }}
+                        </small>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <!-- Tipo -->
+                    <td>
+                        {{ source.source_type | upper }}
+                    </td>
+
+
+                    <!-- Intervalo -->
+                    <td>
+                        {{ source.update_interval }} h
+                    </td>
+
+
+                    <!-- Canales -->
+                    <td>
+                        {{ source.channel_count or 0 }}
+                    </td>
+
+
+                    <!-- Programas -->
+                    <td>
+                        {{ source.programme_count or 0 }}
+                    </td>
+
+
+                    <!-- Estado -->
+                    <td>
+
+                        {% if not source.enabled %}
+
+                            <span class="status-off">
+                                Desactivado
+                            </span>
+
+                        {% elif source.last_status == "OK" %}
+
+                            <span class="status-ok">
+                                OK
+                            </span>
+
+                        {% elif source.last_status == "ERROR" %}
+
+                            <span class="status-error">
+                                ERROR
+                            </span>
+
+                        {% else %}
+
+                            <span class="status-pending">
+                                Sin actualizar
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <!-- Última actualización -->
+                    <td>
+
+                        {% if source.last_update %}
+
+                            {{ source.last_update.strftime(
+                                "%d/%m/%Y %H:%M:%S"
+                            ) }}
+
+                        {% else %}
+
+                            Nunca
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <!-- Acciones -->
+                    <td>
+
+                        <div class="actions">
+
+                            <!-- Actualizar -->
+
+                            <form
+                                method="post"
+                                action="/sources/{{ source.id }}/update"
+                            >
+
+                                <button
+                                    type="submit"
+                                    {% if not source.enabled %}
+                                    disabled
+                                    {% endif %}
+                                >
+                                    Actualizar ahora
+                                </button>
+
+                            </form>
+
+
+                            <!-- Activar / Desactivar -->
+
+                            <form
+                                method="post"
+                                action="/sources/{{ source.id }}/toggle"
+                            >
+
+                                {% if source.enabled %}
+
+                                <button
+                                    type="submit"
+                                    class="secondary"
+                                >
+                                    Desactivar
+                                </button>
+
+                                {% else %}
+
+                                <button
+                                    type="submit"
+                                >
+                                    Activar
+                                </button>
+
+                                {% endif %}
+
+                            </form>
+
+
+                            <!-- Eliminar -->
+
+                            <form
+                                method="post"
+                                action="/sources/{{ source.id }}/delete"
+                                onsubmit="return confirm(
+                                    '¿Eliminar esta fuente EPG?'
+                                );"
+                            >
+
+                                <button
+                                    type="submit"
+                                    class="danger"
+                                >
+                                    Eliminar
+                                </button>
+
+                            </form>
+
+                        </div>
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+
+                <!-- Sin fuentes -->
+
+                {% if not sources %}
+
+                <tr>
+
+                    <td
+                        colspan="9"
+                        style="text-align:center;"
+                    >
+
+                        No hay fuentes EPG configuradas.
+
+                    </td>
+
+                </tr>
+
+                {% endif %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>
