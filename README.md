@@ -5,11 +5,15 @@ Digital Terrestre **ISDB-Tb**.
 
 Permite importar programación desde fuentes XMLTV, generar programación
 manual, asociar canales EPG con servicios ISDB-Tb y generar tablas
-**EIT, TDT y TOT** listas para ser enviadas como MPEG Transport Stream a
-un modulador ISDB-T.
+**SDT, EIT, TDT y TOT** listas para ser enviadas como MPEG Transport Stream
+a un modulador ISDB-T.
+
+También permite agrupar MUX mediante **EPG/EIT Groups** para distribuir
+EIT Other entre varios Transport Streams, de modo que un receptor pueda
+recibir la programación de otros MUX del mismo grupo.
 
 La aplicación incluye una interfaz web para administrar fuentes EPG,
-redes, MUX, servicios y salidas UDP.
+redes, MUX, servicios, EPG/EIT Groups, SDT y salidas UDP.
 
 ## Características
 
@@ -20,6 +24,11 @@ redes, MUX, servicios y salidas UDP.
 -   Múltiples redes ISDB-Tb y múltiples MUX / Transport Streams.
 -   Asociación de canales XMLTV con servicios ISDB-Tb.
 -   EIT Present/Following y EIT Schedule.
+-   EIT Actual y EIT Other.
+-   EPG/EIT Groups para compartir programación entre múltiples MUX.
+-   Generación de SDT Actual configurable por MUX.
+-   Configuración de servicios SDT y flags EIT por servicio.
+-   Herramientas para escanear e importar SDT existentes mediante TSDuck.
 -   TDT y TOT.
 -   Salida MPEG-TS por UDP multicast configurable por MUX.
 -   TTL e interfaz IPv4 de salida configurables.
@@ -45,15 +54,21 @@ Fuentes XMLTV / EPG manual
      Servicio ISDB-Tb
             |
     +-------+-------+
-    |       |       |
-    v       v       v
- EIT P/F Schedule TDT/TOT
-    |       |       |
+    |               |
+    v               v
+EPG/EIT Groups     SDT
+    |           PID 0x0011
+    v               |
+EIT Actual/Other    |
+ PID 0x0012         |
+    |               |
     +-------+-------+
+            |
+         TDT/TOT
+        PID 0x0014
             |
             v
    MPEG Transport Stream
-     PID 0x0012 / 0x0014
             |
             v
       UDP / Multicast
@@ -67,6 +82,18 @@ Fuentes XMLTV / EPG manual
 
 Una única instancia puede administrar múltiples MUX. Cada MUX puede
 tener su propia dirección UDP, puerto, TTL e interfaz de salida.
+
+Los PID generados son:
+
+``` text
+0x0011  SDT
+0x0012  EIT Present/Following + EIT Schedule
+0x0014  TDT + TOT
+```
+
+Los MUX pueden organizarse en EPG/EIT Groups. Dentro de un grupo, cada
+salida transmite su propia EIT Actual y además EIT Other correspondiente
+a los demás MUX habilitados del mismo grupo.
 
 ## Plataforma validada
 
@@ -150,7 +177,7 @@ Una respuesta correcta contiene:
 ``` json
 {
   "status": "ok",
-  "version": "0.2.0"
+  "version": "0.3.0"
 }
 ```
 
@@ -244,14 +271,14 @@ ISDB-Tb Network
    v
 MUX / Transport Stream
    |
-   v
-Servicios
+   +--> Servicios + Mapeo EPG
+   |
+   +--> EPG/EIT Group
+   |
+   +--> SDT
    |
    v
-Mapeo Servicio <-> Canal EPG
-   |
-   v
-EIT P/F + Schedule
+EIT Actual / Other + SDT + TDT/TOT
    |
    v
 UDP / Multicast
@@ -345,11 +372,38 @@ configurarse:
 El SID debe coincidir con el Service ID real utilizado en el Transport
 Stream.
 
+## EPG/EIT Groups
+
+Los **EPG/EIT Groups** permiten relacionar varios MUX para distribuir la
+programación de todos ellos en cada carrier del grupo.
+
+Cada MUX puede pertenecer como máximo a un grupo. Un grupo puede estar
+habilitado o deshabilitado. Si un MUX no pertenece a ningún grupo, el
+comportamiento permanece limitado a sus propias tablas EIT Actual.
+
+Dentro de un grupo habilitado:
+
+-   El MUX local genera EIT Present/Following Actual (`table_id 0x4E`).
+-   Los demás MUX del grupo se anuncian mediante EIT Present/Following
+    Other (`table_id 0x4F`).
+-   El Schedule del MUX local utiliza EIT Schedule Actual
+    (`table_id 0x50` a `0x5F`).
+-   El Schedule de los demás MUX utiliza EIT Schedule Other
+    (`table_id 0x60` a `0x6F`).
+-   Las tablas Other conservan el TSID, ONID y Service ID del MUX al que
+    realmente pertenece cada servicio.
+-   Actual y Other comparten el PID EIT `0x0012` de la salida del MUX.
+
+Esto permite que receptores compatibles aprendan la programación de
+otros Transport Streams sin necesidad de sintonizarlos previamente.
+
 ## EIT Present/Following
 
 -   PID: `0x0012`
 -   EIT Present/Following Actual: `table_id 0x4E`
--   Intervalo predeterminado: 2 segundos
+-   EIT Present/Following Other: `table_id 0x4F`
+-   Intervalo predeterminado Actual: 2 segundos
+-   Intervalo predeterminado Other: 20 segundos
 
 ## EIT Schedule
 
@@ -359,12 +413,68 @@ El sistema mantiene un carousel continuo de EIT Schedule sobre PID
 Valores predeterminados:
 
 ``` text
-Schedule prime interval: 10 segundos
-Schedule later interval: 30 segundos
+Schedule Actual prime: 10 segundos
+Schedule Actual later: 30 segundos
+Schedule Other prime:  60 segundos
+Schedule Other later:  300 segundos
 ```
 
+El Schedule Actual utiliza `table_id 0x50` a `0x5F` y el Schedule Other
+utiliza `table_id 0x60` a `0x6F`.
+
 La caché interna se regenera periódicamente para incorporar cambios de
-programación.
+programación. La generación compartida evita repetir innecesariamente el
+trabajo pesado cuando varios MUX pertenecen al mismo EPG/EIT Group.
+
+## SDT Generator
+
+El sistema puede generar **SDT Actual** para cada MUX sobre PID `0x0011`.
+
+La configuración SDT permite definir los servicios anunciados en cada
+Transport Stream y sus parámetros principales:
+
+-   Service ID.
+-   Service type.
+-   Service name.
+-   Provider name.
+-   `eit_schedule`.
+-   `eit_present_following`.
+-   Running status.
+-   Free CA mode.
+
+La interfaz web permite crear, editar, habilitar o deshabilitar la
+configuración SDT de cada MUX y administrar sus servicios. También existe
+una configuración global para valores predeterminados al crear nuevos
+servicios.
+
+La SDT se transmite por la misma salida UDP configurada para el MUX y
+mantiene un continuity counter independiente.
+
+### Importación de una SDT existente
+
+El directorio `tools/sdt-import/` incluye herramientas para migrar la SDT
+de Transport Streams existentes. El scanner utiliza TSDuck para leer SDT
+Actual (`table_id 0x42`) desde PID `0x0011`.
+
+``` bash
+cd /opt/isdb-epg/tools/sdt-import
+/opt/isdb-epg/venv/bin/python scan_sdt.py --config inputs.json --output sdt-import.json
+```
+
+Validación sin modificar la base:
+
+``` bash
+/opt/isdb-epg/venv/bin/python import_sdt.py --check sdt-import.json
+```
+
+Importación:
+
+``` bash
+/opt/isdb-epg/venv/bin/python import_sdt.py sdt-import.json
+```
+
+Consulte `tools/sdt-import/README.md` o
+`tools/sdt-import/README.spa.md` para la documentación completa.
 
 ## TDT / TOT
 
@@ -427,6 +537,10 @@ Los mecanismos exactos de inserción dependen del fabricante. En equipos
 con `PID Bypass` pueden incorporarse los PID generados al TS final. Debe
 verificarse que no existan conflictos de PID.
 
+Para utilizar todas las tablas generadas deben permitirse los PID
+`0x0011` (SDT), `0x0012` (EIT) y `0x0014` (TDT/TOT), evitando que el
+modulador genere tablas incompatibles sobre esos mismos PID.
+
 ## Verificación de multicast
 
 ``` bash
@@ -447,9 +561,12 @@ se utilizó TSDuck 3.45-4798.
 Puede comprobar:
 
 ``` text
+PID 0x0011
+    SDT Actual
+
 PID 0x0012
-    EIT Present/Following
-    EIT Schedule
+    EIT Present/Following Actual / Other
+    EIT Schedule Actual / Other
 
 PID 0x0014
     TDT
@@ -537,9 +654,11 @@ Comprobar:
 4.  Asociación servicio/canal EPG.
 5.  EIT Present/Following habilitado.
 6.  EIT Schedule habilitado.
-7.  PID `0x0012` presente en el TS final.
-8.  PID `0x0014` presente para TDT/TOT.
-9.  PID Bypass/SI insertion del modulador.
+7.  Pertenencia al EPG/EIT Group correcto si se utiliza EIT Other.
+8.  PID `0x0011` presente si se utiliza el SDT Generator.
+9.  PID `0x0012` presente en el TS final.
+10. PID `0x0014` presente para TDT/TOT.
+11. PID Bypass/SI insertion del modulador.
 
 ## Estructura del proyecto
 
@@ -550,6 +669,7 @@ isdb-epg/
 │   ├── models.py
 │   ├── epg/
 │   │   ├── manual.py
+│   │   ├── scheduler.py
 │   │   └── xmltv_importer.py
 │   ├── isdb/
 │   │   ├── broadcaster.py
@@ -560,6 +680,7 @@ isdb-epg/
 │   │   ├── generator.py
 │   │   ├── manager.py
 │   │   ├── packetizer.py
+│   │   ├── sdt.py
 │   │   ├── text.py
 │   │   └── time_tables.py
 │   └── web/
@@ -572,6 +693,8 @@ isdb-epg/
 │   ├── isdb-epg.service
 │   └── nginx.conf.example
 ├── logs/
+├── tools/
+│   └── sdt-import/
 ├── eit_streamer.py
 ├── main.py
 ├── requirements.txt
@@ -616,7 +739,22 @@ de comercialización del software, esta es una licencia
 
 ## Versión
 
-Versión actual: **0.2.0**
+Versión actual: **0.3.0**
+
+### Novedades de v0.3.0
+
+-   EPG/EIT Groups para relacionar múltiples MUX.
+-   EIT Present/Following Other (`0x4F`).
+-   EIT Schedule Other (`0x60` a `0x6F`).
+-   Generación y caché compartida de EIT por grupo.
+-   Cadencias independientes para EIT Actual y Other.
+-   SDT Generator sobre PID `0x0011`.
+-   Administración web de SDT y sus servicios.
+-   Configuración global/defaults para SDT.
+-   Herramientas TSDuck para escanear, validar e importar SDT existentes.
+-   Scheduler automático para actualización de fuentes EPG.
+-   Configuración de actualización automática para fuentes EPG manuales.
+-   Preservación estable de IDs de canales XMLTV durante actualizaciones.
 
 El proyecto está siendo desarrollado y probado en un entorno real
 ISDB-Tb.
