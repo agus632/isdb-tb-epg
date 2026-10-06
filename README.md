@@ -620,3 +620,7 @@ Versión actual: **0.2.0**
 
 El proyecto está siendo desarrollado y probado en un entorno real
 ISDB-Tb.
+
+## Fuentes EPG
+
+Las fuentes XMLTV pueden ser de pago como ReporTV o las versiones free dispobles en internet como FreeEPG o IPTV-EPG 
