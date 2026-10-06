@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Nueva configuración SDT</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="/map">Mapeo</a>
+    <a href="/program">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+    <a href="/isdb/epg-groups">EPG/EIT Groups</a>
+    <a href="/isdb/sdt">SDT</a>
+
+</div>
+
+
+<div class="content">
+
+    <a
+        class="back-link"
+        href="/isdb/sdt"
+    >
+        ← Volver a SDT
+    </a>
+
+
+    <h1>Nueva configuración SDT</h1>
+
+    <p>
+        Seleccione el MUX al que pertenecerá la nueva SDT.
+        Solamente se muestran portadoras que todavía no tienen
+        una configuración SDT.
+    </p>
+
+
+    <div class="panel">
+
+        {% if available_muxes %}
+
+            <form
+                method="post"
+                action="/isdb/sdt/new"
+            >
+
+                <label>MUX / Portadora</label>
+
+                <select
+                    name="transport_stream_id_fk"
+                    required
+                >
+
+                    {% for mux in available_muxes %}
+
+                        <option value="{{ mux.id }}">
+                            {{ mux.name }}
+                            — TSID {{ mux.transport_stream_id }}
+                            — ONID {{ mux.network.original_network_id }}
+                            {% if mux.physical_channel is not none %}
+                                — RF {{ mux.physical_channel }}
+                            {% endif %}
+                        </option>
+
+                    {% endfor %}
+
+                </select>
+
+
+                <p>
+                    La nueva configuración se creará
+                    deshabilitada, versión 0 y sin servicios.
+                </p>
+
+
+                <div class="actions">
+
+                    <button type="submit">
+                        Crear configuración SDT
+                    </button>
+
+                    <a
+                        class="button-link secondary"
+                        href="/isdb/sdt"
+                    >
+                        Cancelar
+                    </a>
+
+                </div>
+
+            </form>
+
+        {% else %}
+
+            <p>
+                No hay MUXes disponibles.
+                Todas las portadoras existentes ya tienen
+                una configuración SDT vinculada.
+            </p>
+
+            <div class="actions">
+                <a
+                    class="button-link secondary"
+                    href="/isdb/sdt"
+                >
+                    Volver
+                </a>
+            </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+</body>
+</html>

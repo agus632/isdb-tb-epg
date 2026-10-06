@@ -18,6 +18,11 @@ class EPGSource(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     update_interval: Mapped[int] = mapped_column(Integer, default=6)
 
+    # Manual EPG generation settings.
+    # NULL for non-manual/XMLTV sources.
+    manual_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    manual_block_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     last_update: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     last_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -284,10 +289,328 @@ class ISDBTransportStream(Base):
         default=datetime.utcnow,
     )
 
+    epg_group_memberships = relationship(
+        "ISDBEPGGroupMember",
+        back_populates="transport_stream",
+        cascade="all, delete-orphan",
+    )
+
+    sdt_config = relationship(
+        "ISDBSDTConfig",
+        back_populates="transport_stream",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
     network = relationship(
         "ISDBNetwork",
         back_populates="transport_streams",
     )
+
+
+class ISDBSDTGlobalConfig(Base):
+    __tablename__ = "isdb_sdt_global_config"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    default_provider_name: Mapped[str] = mapped_column(
+        String(255),
+        default="",
+        nullable=False,
+    )
+
+    default_service_type: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        nullable=False,
+    )
+
+    default_running_status: Mapped[str] = mapped_column(
+        String(32),
+        default="running",
+        nullable=False,
+    )
+
+    default_free_ca_mode: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    default_eit_present_following: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    default_eit_schedule: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    default_service_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+
+class ISDBSDTConfig(Base):
+    __tablename__ = "isdb_sdt_configs"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    transport_stream_id_fk: Mapped[int] = mapped_column(
+        ForeignKey(
+            "isdb_transport_streams.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        unique=True,
+    )
+
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    version: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    output_mode: Mapped[str] = mapped_column(
+        String(16),
+        default="none",
+        nullable=False,
+    )
+
+    output_address: Mapped[str] = mapped_column(
+        String(64),
+        default="239.255.1.1",
+        nullable=False,
+    )
+
+    output_port: Mapped[int] = mapped_column(
+        Integer,
+        default=5100,
+        nullable=False,
+    )
+
+    output_ttl: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        nullable=False,
+    )
+
+    output_interface: Mapped[str] = mapped_column(
+        String(64),
+        default="",
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    transport_stream = relationship(
+        "ISDBTransportStream",
+        back_populates="sdt_config",
+    )
+
+    services = relationship(
+        "ISDBSDTService",
+        back_populates="sdt_config",
+        cascade="all, delete-orphan",
+    )
+
+
+class ISDBSDTService(Base):
+    __tablename__ = "isdb_sdt_services"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    sdt_config_id_fk: Mapped[int] = mapped_column(
+        ForeignKey(
+            "isdb_sdt_configs.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    service_id: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    service_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    provider_name: Mapped[str] = mapped_column(
+        String(255),
+        default="",
+        nullable=False,
+    )
+
+    service_type: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
+
+    running_status: Mapped[str] = mapped_column(
+        String(32),
+        default="running",
+        nullable=False,
+    )
+
+    free_ca_mode: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    eit_present_following: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    eit_schedule: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    sdt_config = relationship(
+        "ISDBSDTConfig",
+        back_populates="services",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "sdt_config_id_fk",
+            "service_id",
+            name="uq_isdb_sdt_service",
+        ),
+    )
+
+
+class ISDBEPGGroup(Base):
+    __tablename__ = "isdb_epg_groups"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        unique=True,
+    )
+
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    members = relationship(
+        "ISDBEPGGroupMember",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+
+class ISDBEPGGroupMember(Base):
+    __tablename__ = "isdb_epg_group_members"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "isdb_epg_groups.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    transport_stream_id_fk: Mapped[int] = mapped_column(
+        ForeignKey(
+            "isdb_transport_streams.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    group = relationship(
+        "ISDBEPGGroup",
+        back_populates="members",
+    )
+
+    transport_stream = relationship(
+        "ISDBTransportStream",
+        back_populates="epg_group_memberships",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "group_id",
+            "transport_stream_id_fk",
+            name="uq_epg_group_mux",
+        ),
+        UniqueConstraint(
+            "transport_stream_id_fk",
+            name="uq_epg_group_mux_single_membership",
+        ),
+    )
+
+
 class ISDBService(Base):
     __tablename__ = "isdb_services"
 

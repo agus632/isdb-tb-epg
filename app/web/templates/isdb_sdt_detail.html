@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>{{ mux.name }} - SDT</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="/map">Mapeo</a>
+    <a href="/program">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+    <a href="/isdb/epg-groups">EPG/EIT Groups</a>
+    <a href="/isdb/sdt">SDT</a>
+
+</div>
+
+
+<div class="content">
+
+    <a
+        class="back-link"
+        href="/isdb/sdt"
+    >
+        ← Volver a SDT
+    </a>
+
+
+    <h1>SDT — {{ mux.name }}</h1>
+
+    <p>
+        Service Description Table de esta portadora.
+    </p>
+
+
+    <div class="panel">
+
+        <h2>Identidad del Transport Stream</h2>
+
+        <table>
+
+            <tbody>
+
+                <tr>
+                    <th>Red</th>
+                    <td>{{ network.name }}</td>
+                </tr>
+
+                <tr>
+                    <th>Portadora</th>
+                    <td>{{ mux.name }}</td>
+                </tr>
+
+                <tr>
+                    <th>Canal RF</th>
+                    <td>
+                        {% if mux.physical_channel is not none %}
+                            {{ mux.physical_channel }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>TSID</th>
+                    <td>
+                        {{ mux.transport_stream_id }}
+                        (0x{{ "%04X"|format(mux.transport_stream_id) }})
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>ONID</th>
+                    <td>
+                        {{ network.original_network_id }}
+                        (0x{{ "%04X"|format(network.original_network_id) }})
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>Versión SDT</th>
+                    <td>{{ config.version }}</td>
+                </tr>
+
+                <tr>
+                    <th>Estado SDT</th>
+                    <td>
+                        {% if config.enabled %}
+                            <span class="status-ok">
+                                Habilitado
+                            </span>
+                        {% else %}
+                            <span class="status-off">
+                                Deshabilitado
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>Transmisión SDT</h2>
+
+        <p>
+            La SDT se transmite por PID 0x0011 utilizando
+            la misma salida del MUX que EIT y TDT/TOT.
+        </p>
+
+        <p>
+            Estado:
+            {% if config.enabled %}
+                <span class="status-ok">
+                    Habilitado
+                </span>
+            {% else %}
+                <span class="status-off">
+                    Deshabilitado
+                </span>
+            {% endif %}
+        </p>
+
+        <form
+            method="post"
+            action="/isdb/sdt/{{ config.id }}/toggle"
+        >
+            <button type="submit">
+                {% if config.enabled %}
+                    Deshabilitar transmisión SDT
+                {% else %}
+                    Habilitar transmisión SDT
+                {% endif %}
+            </button>
+        </form>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>Vinculación SDT</h2>
+
+        <p>
+            Define el MUX al que pertenece esta configuración SDT.
+            La Red, TSID y ONID se obtienen automáticamente
+            del MUX seleccionado.
+        </p>
+
+        <form
+            method="post"
+            action="/isdb/sdt/{{ config.id }}/link"
+        >
+
+            <label>MUX / Portadora</label>
+
+            <select
+                name="transport_stream_id_fk"
+                required
+            >
+
+                {% for available_mux in available_muxes %}
+
+                    <option
+                        value="{{ available_mux.id }}"
+                        {% if available_mux.id == mux.id %}
+                            selected
+                        {% endif %}
+                    >
+                        {{ available_mux.name }}
+                        — TSID {{ available_mux.transport_stream_id }}
+                        — ONID {{ available_mux.network.original_network_id }}
+                        {% if available_mux.physical_channel is not none %}
+                            — RF {{ available_mux.physical_channel }}
+                        {% endif %}
+                    </option>
+
+                {% endfor %}
+
+            </select>
+
+            <p>
+                Red actual:
+                <strong>{{ network.name }}</strong>
+                —
+                TSID {{ mux.transport_stream_id }}
+                —
+                ONID {{ network.original_network_id }}
+            </p>
+
+            <div class="actions">
+
+                <button type="submit">
+                    Guardar vinculación
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+
+    <div class="panel">
+
+        <div class="panel-header">
+
+            <h2>Servicios SDT</h2>
+
+            <div>
+                {{ services|length }} servicios
+            </div>
+
+        </div>
+
+
+        <div class="actions">
+            <a
+                class="button-link"
+                href="/isdb/sdt/{{ config.id }}/service/add"
+            >
+                Nuevo servicio
+            </a>
+        </div>
+
+        {% if services %}
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>SID</th>
+                    <th>Nombre</th>
+                    <th>Proveedor</th>
+                    <th>Tipo</th>
+                    <th>Running status</th>
+                    <th>CA</th>
+                    <th>EIT P/F</th>
+                    <th>EIT Schedule</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+            {% for service in services %}
+
+                <tr>
+
+                    <td>
+                        {{ service.service_id }}
+                        <br>
+                        <small>
+                            0x{{ "%04X"|format(service.service_id) }}
+                        </small>
+                    </td>
+
+                    <td>
+                        <strong>
+                            {{ service.service_name }}
+                        </strong>
+                    </td>
+
+                    <td>
+                        {% if service.provider_name %}
+                            {{ service.provider_name }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {{ service.service_type }}
+                        <br>
+                        <small>
+                            0x{{ "%02X"|format(service.service_type) }}
+                        </small>
+                    </td>
+
+                    <td>
+                        {{ service.running_status }}
+                    </td>
+
+                    <td>
+                        {% if service.free_ca_mode %}
+                            <span class="status-pending">
+                                Sí
+                            </span>
+                        {% else %}
+                            No
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if service.eit_present_following %}
+                            <span class="status-ok">
+                                Sí
+                            </span>
+                        {% else %}
+                            <span class="status-off">
+                                No
+                            </span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if service.eit_schedule %}
+                            <span class="status-ok">
+                                Sí
+                            </span>
+                        {% else %}
+                            <span class="status-off">
+                                No
+                            </span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if service.enabled %}
+                            <span class="status-ok">
+                                Habilitado
+                            </span>
+                        {% else %}
+                            <span class="status-off">
+                                Deshabilitado
+                            </span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <div class="actions">
+
+                            <a
+                                class="button-link"
+                                href="/isdb/sdt/service/{{ service.id }}/edit"
+                            >
+                                Editar
+                            </a>
+
+                            <form
+                                method="post"
+                                action="/isdb/sdt/service/{{ service.id }}/delete"
+                                style="display: inline;"
+                                onsubmit="return confirm('¿Eliminar el servicio SID {{ service.service_id }} - {{ service.service_name }}?');"
+                            >
+                                <button
+                                    type="submit"
+                                    class="secondary"
+                                >
+                                    Eliminar
+                                </button>
+                            </form>
+
+                        </div>
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+        {% else %}
+
+            <p>
+                Esta configuración SDT no contiene servicios.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+</body>
+</html>

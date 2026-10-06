@@ -237,29 +237,51 @@ def import_xmltv(source: EPGSource, db: Session):
 
         #
         # PASO 5
-        # Recién AHORA reemplazamos la información anterior.
+        # Reemplazar programación conservando IDs estables
+        # de los canales.
+        #
+        # ISDBService.epg_channel_id referencia directamente
+        # EPGChannel.id. Por eso los canales existentes NO
+        # deben eliminarse y recrearse durante una actualización.
         #
         db.query(EPGProgramme).filter(
             EPGProgramme.source_id == source_id
         ).delete(synchronize_session=False)
 
-        db.query(EPGChannel).filter(
-            EPGChannel.source_id == source_id
-        ).delete(synchronize_session=False)
-
-        db.flush()
+        #
+        # Indexar los canales existentes por xmltv_id.
+        #
+        existing_channels = {
+            channel.xmltv_id: channel
+            for channel in db.query(EPGChannel).filter(
+                EPGChannel.source_id == source_id
+            ).all()
+        }
 
         #
-        # Insertar canales
+        # Actualizar canales existentes conservando su ID.
+        # Crear solamente los canales realmente nuevos.
         #
-        for channel in parsed_channels:
-            db.add(
-                EPGChannel(
-                    source_id=source_id,
-                    **channel,
+        for channel_data in parsed_channels:
+            xmltv_id = channel_data["xmltv_id"]
+            existing = existing_channels.get(xmltv_id)
+
+            if existing is not None:
+                existing.display_name = channel_data["display_name"]
+                existing.icon_url = channel_data["icon_url"]
+            else:
+                db.add(
+                    EPGChannel(
+                        source_id=source_id,
+                        **channel_data,
+                    )
                 )
-            )
 
+        #
+        # Los canales que ya no aparecen en el XMLTV se conservan.
+        # Pueden seguir referenciados por ISDBService.epg_channel_id
+        # y eliminarlos dejaría mappings huérfanos.
+        #
         db.flush()
 
         #

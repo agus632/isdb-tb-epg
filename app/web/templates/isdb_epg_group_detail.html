@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>{{ group.name }} - EPG/EIT Group</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="#">Mapeo</a>
+    <a href="#">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+    <a href="/isdb/epg-groups">EPG/EIT Groups</a>
+    <a href="/isdb/sdt">SDT</a>
+
+</div>
+
+
+<div class="content">
+
+    <a
+        href="/isdb/epg-groups"
+        class="back-link"
+    >
+        ← Volver a EPG/EIT Groups
+    </a>
+
+
+    <div class="panel">
+
+        <div class="panel-header">
+
+            <div>
+                <h1>{{ group.name }}</h1>
+
+                <p>
+                    Configuración del EPG/EIT Group.
+                </p>
+            </div>
+
+            <div>
+                {% if group.enabled %}
+                    <span class="status-ok">
+                        Activo
+                    </span>
+                {% else %}
+                    <span class="status-off">
+                        Deshabilitado
+                    </span>
+                {% endif %}
+            </div>
+
+        </div>
+
+
+        <form
+            method="post"
+            action="/isdb/epg-groups/{{ group.id }}/edit"
+        >
+
+            <label>Nombre del grupo</label>
+
+            <input
+                type="text"
+                name="name"
+                value="{{ group.name }}"
+                required
+            >
+
+
+            <h2>Portadoras</h2>
+
+            <p>
+                Seleccioná las portadoras que intercambiarán
+                EIT Other dentro de este grupo.
+            </p>
+
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Incluir</th>
+                        <th>Red</th>
+                        <th>Portadora</th>
+                        <th>Canal RF</th>
+                        <th>TSID</th>
+                        <th>ONID</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                {% for mux in muxes %}
+
+                    {% set membership = (
+                        mux.epg_group_memberships[0]
+                        if mux.epg_group_memberships
+                        else none
+                    ) %}
+
+                    {% set belongs_here = (
+                        membership
+                        and membership.group_id == group.id
+                    ) %}
+
+                    {% set belongs_elsewhere = (
+                        membership
+                        and membership.group_id != group.id
+                    ) %}
+
+
+                    <tr>
+
+                        <td>
+                            <input
+                                type="checkbox"
+                                name="mux_ids"
+                                value="{{ mux.id }}"
+                                style="width:auto;"
+                                {% if belongs_here %}
+                                    checked
+                                {% endif %}
+                                {% if belongs_elsewhere %}
+                                    disabled
+                                {% endif %}
+                            >
+                        </td>
+
+
+                        <td>
+                            <strong>
+                                {{ mux.network.name }}
+                            </strong>
+                        </td>
+
+
+                        <td>
+                            {{ mux.name }}
+                        </td>
+
+
+                        <td>
+                            {% if mux.physical_channel is not none %}
+                                {{ mux.physical_channel }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+
+
+                        <td>
+                            {{ mux.transport_stream_id }}
+                            <br>
+                            <small>
+                                0x{{ "%04X"|format(mux.transport_stream_id) }}
+                            </small>
+                        </td>
+
+
+                        <td>
+                            {{ mux.network.original_network_id }}
+                            <br>
+                            <small>
+                                0x{{ "%04X"|format(mux.network.original_network_id) }}
+                            </small>
+                        </td>
+
+
+                        <td>
+
+                            {% if belongs_here %}
+
+                                <span class="status-ok">
+                                    En este grupo
+                                </span>
+
+                            {% elif belongs_elsewhere %}
+
+                                <span class="status-pending">
+                                    {{ membership.group.name }}
+                                </span>
+
+                            {% elif mux.enabled %}
+
+                                <span class="status-off">
+                                    Disponible
+                                </span>
+
+                            {% else %}
+
+                                <span class="status-off">
+                                    Deshabilitada
+                                </span>
+
+                            {% endif %}
+
+                        </td>
+
+                    </tr>
+
+                {% endfor %}
+
+                </tbody>
+
+            </table>
+
+
+            <button type="submit">
+                Guardar cambios
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>Estado del grupo</h2>
+
+        <div class="actions">
+
+            <form
+                method="post"
+                action="/isdb/epg-groups/{{ group.id }}/toggle"
+            >
+
+                <button
+                    type="submit"
+                    class="secondary"
+                >
+                    {% if group.enabled %}
+                        Deshabilitar grupo
+                    {% else %}
+                        Habilitar grupo
+                    {% endif %}
+                </button>
+
+            </form>
+
+
+            <form
+                method="post"
+                action="/isdb/epg-groups/{{ group.id }}/delete"
+                onsubmit="return confirm(
+                    '¿Eliminar este EPG/EIT Group?'
+                );"
+            >
+
+                <button
+                    type="submit"
+                    class="danger"
+                >
+                    Eliminar grupo
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

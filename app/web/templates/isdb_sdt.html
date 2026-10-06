@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>SDT - ISDB-Tb EPG</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="#">Mapeo</a>
+    <a href="#">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+    <a href="/isdb/epg-groups">EPG/EIT Groups</a>
+    <a href="/isdb/sdt">SDT</a>
+
+</div>
+
+
+<div class="content">
+
+    <h1>SDT Generator</h1>
+
+    <p>
+        Administración independiente de Service Description
+        Table para las portadoras ISDB-Tb.
+    </p>
+
+    <div class="actions">
+
+        <a
+            class="button-link"
+            href="/isdb/sdt/new"
+        >
+            Nueva configuración SDT
+        </a>
+
+        <a
+            class="button-link secondary"
+            href="/isdb/sdt/global"
+        >
+            Configuración global
+        </a>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>Portadoras</h2>
+
+        {% if configs %}
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>Red</th>
+                    <th>Portadora</th>
+                    <th>Canal RF</th>
+                    <th>TSID</th>
+                    <th>ONID</th>
+                    <th>Servicios</th>
+                    <th>Versión</th>
+                    <th>Estado SDT</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+            {% for config in configs %}
+
+                {% set mux = config.transport_stream %}
+
+                <tr>
+
+                    <td>
+                        <strong>
+                            {{ mux.network.name }}
+                        </strong>
+                    </td>
+
+                    <td>
+                        {{ mux.name }}
+                    </td>
+
+                    <td>
+                        {% if mux.physical_channel is not none %}
+                            {{ mux.physical_channel }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {{ mux.transport_stream_id }}
+                        <br>
+                        <small>
+                            0x{{ "%04X"|format(mux.transport_stream_id) }}
+                        </small>
+                    </td>
+
+                    <td>
+                        {{ mux.network.original_network_id }}
+                        <br>
+                        <small>
+                            0x{{ "%04X"|format(mux.network.original_network_id) }}
+                        </small>
+                    </td>
+
+                    <td>
+                        {{ config.services|length }}
+                    </td>
+
+                    <td>
+                        {{ config.version }}
+                    </td>
+
+                    <td>
+                        {% if config.enabled %}
+                            <span class="status-ok">
+                                Habilitado
+                            </span>
+                        {% else %}
+                            <span class="status-off">
+                                Deshabilitado
+                            </span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <div class="actions">
+                            <a
+                                class="button-link"
+                                href="/isdb/sdt/{{ config.id }}"
+                            >
+                                Administrar
+                            </a>
+                        </div>
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+        {% else %}
+
+            <p>
+                No hay configuraciones SDT importadas.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+</body>
+</html>

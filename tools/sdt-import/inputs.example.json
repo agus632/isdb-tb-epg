@@ -1,0 +1,16 @@
+{
+  "interface": "192.168.1.10",
+  "timeout": 5,
+  "inputs": [
+    {
+      "name": "MUX1",
+      "address": "239.1.1.1",
+      "port": 2001
+    },
+    {
+      "name": "MUX2",
+      "address": "239.1.1.1",
+      "port": 2002
+    }
+  ]
+}

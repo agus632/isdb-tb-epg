@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>EPG/EIT Groups - ISDB-Tb EPG</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="#">Mapeo</a>
+    <a href="#">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+    <a href="/isdb/epg-groups">EPG/EIT Groups</a>
+    <a href="/isdb/sdt">SDT</a>
+
+</div>
+
+
+<div class="content">
+
+    <h1>EPG/EIT Groups</h1>
+
+    <p>
+        Administración de los grupos de portadoras que
+        compartirán información mediante EIT Other
+        Transport Stream.
+    </p>
+
+
+    {% set error = request.query_params.get("error") %}
+
+    {% if error == "name" %}
+        <div class="error-box">
+            El nombre del grupo no puede estar vacío.
+        </div>
+    {% elif error == "duplicate_name" %}
+        <div class="error-box">
+            Ya existe un grupo con ese nombre.
+        </div>
+    {% elif error == "mux_assigned" %}
+        <div class="error-box">
+            Una de las portadoras seleccionadas ya pertenece
+            a otro EPG/EIT Group.
+        </div>
+    {% elif error == "database" %}
+        <div class="error-box">
+            Se produjo un error al guardar la configuración.
+        </div>
+    {% endif %}
+
+
+    <div class="panel">
+
+        <h2>Crear grupo</h2>
+
+        <p>
+            Creá el grupo primero. Luego podrás ingresar
+            a Administrar para asignarle las portadoras.
+        </p>
+
+        <form
+            method="post"
+            action="/isdb/epg-groups/add"
+        >
+
+            <label>Nombre del grupo</label>
+
+            <input
+                type="text"
+                name="name"
+                placeholder="Ej: Aristobulo"
+                required
+            >
+
+            <h3>Portadoras</h3>
+
+            <p>
+                Seleccioná las portadoras que formarán parte
+                del nuevo EPG/EIT Group.
+            </p>
+
+            {% if muxes %}
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Incluir</th>
+                        <th>Red</th>
+                        <th>Portadora</th>
+                        <th>Canal RF</th>
+                        <th>TSID</th>
+                        <th>ONID</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                {% for mux in muxes %}
+
+                    {% set membership = (
+                        mux.epg_group_memberships[0]
+                        if mux.epg_group_memberships
+                        else none
+                    ) %}
+
+                    <tr>
+
+                        <td>
+                            <input
+                                type="checkbox"
+                                name="mux_ids"
+                                value="{{ mux.id }}"
+                                style="width:auto;"
+                                {% if membership %}
+                                    disabled
+                                {% endif %}
+                            >
+                        </td>
+
+                        <td>
+                            <strong>
+                                {{ mux.network.name }}
+                            </strong>
+                        </td>
+
+                        <td>
+                            {{ mux.name }}
+                        </td>
+
+                        <td>
+                            {% if mux.physical_channel is not none %}
+                                {{ mux.physical_channel }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {{ mux.transport_stream_id }}
+                            <br>
+                            <small>
+                                0x{{ "%04X"|format(mux.transport_stream_id) }}
+                            </small>
+                        </td>
+
+                        <td>
+                            {{ mux.network.original_network_id }}
+                            <br>
+                            <small>
+                                0x{{ "%04X"|format(mux.network.original_network_id) }}
+                            </small>
+                        </td>
+
+                        <td>
+                            {% if membership %}
+                                <span class="status-pending">
+                                    En {{ membership.group.name }}
+                                </span>
+                            {% elif mux.enabled %}
+                                <span class="status-ok">
+                                    Disponible
+                                </span>
+                            {% else %}
+                                <span class="status-off">
+                                    Deshabilitada
+                                </span>
+                            {% endif %}
+                        </td>
+
+                    </tr>
+
+                {% endfor %}
+
+                </tbody>
+
+            </table>
+
+            {% else %}
+
+                <p>
+                    No hay portadoras ISDB-Tb configuradas.
+                </p>
+
+            {% endif %}
+
+
+            <button type="submit">
+                Crear grupo
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>Grupos configurados</h2>
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Estado</th>
+                    <th>Portadoras</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+            {% for group in groups %}
+
+                <tr>
+
+                    <td>
+                        <strong>
+                            {{ group.name }}
+                        </strong>
+                    </td>
+
+                    <td>
+                        {% if group.enabled %}
+                            <span class="status-ok">
+                                Activo
+                            </span>
+                        {% else %}
+                            <span class="status-off">
+                                Deshabilitado
+                            </span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {{ group.members|length }}
+                    </td>
+
+                    <td>
+
+                        <div class="actions">
+
+                            <a
+                                href="/isdb/epg-groups/{{ group.id }}"
+                                class="button-link"
+                            >
+                                Administrar
+                            </a>
+
+                        </div>
+
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+
+            {% if not groups %}
+
+                <tr>
+                    <td
+                        colspan="4"
+                        style="text-align:center;"
+                    >
+                        No hay EPG/EIT Groups configurados.
+                    </td>
+                </tr>
+
+            {% endif %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+</body>
+</html>

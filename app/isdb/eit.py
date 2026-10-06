@@ -13,9 +13,13 @@ from app.isdb.descriptors import (
 
 
 EIT_ACTUAL_PRESENT_FOLLOWING = 0x4E
+EIT_OTHER_PRESENT_FOLLOWING = 0x4F
 
 EIT_ACTUAL_SCHEDULE_FIRST = 0x50
 EIT_ACTUAL_SCHEDULE_LAST = 0x5F
+
+EIT_OTHER_SCHEDULE_FIRST = 0x60
+EIT_OTHER_SCHEDULE_LAST = 0x6F
 
 MAX_SECTION_LENGTH = 4093
 
@@ -223,7 +227,16 @@ def build_present_following(
     following: EITEvent | None,
     language: str = "spa",
     extended_description: bool = True,
+    table_id: int = EIT_ACTUAL_PRESENT_FOLLOWING,
 ) -> list[bytes]:
+
+    if table_id not in (
+        EIT_ACTUAL_PRESENT_FOLLOWING,
+        EIT_OTHER_PRESENT_FOLLOWING,
+    ):
+        raise ValueError(
+            "table_id P/F debe ser 0x4E o 0x4F"
+        )
 
     sections = []
 
@@ -231,7 +244,7 @@ def build_present_following(
 
         sections.append(
             build_eit_section(
-                table_id=0x4E,
+                table_id=table_id,
                 service_id=service_id,
                 transport_stream_id=(
                     transport_stream_id
@@ -251,7 +264,7 @@ def build_present_following(
                     if following is not None
                     else 0
                 ),
-                last_table_id=0x4E,
+                last_table_id=table_id,
                 events=[present],
                 language=language,
                 extended_description=(
@@ -264,7 +277,7 @@ def build_present_following(
 
         sections.append(
             build_eit_section(
-                table_id=0x4E,
+                table_id=table_id,
                 service_id=service_id,
                 transport_stream_id=(
                     transport_stream_id
@@ -276,7 +289,7 @@ def build_present_following(
                 section_number=1,
                 last_section_number=1,
                 segment_last_section_number=1,
-                last_table_id=0x4E,
+                last_table_id=table_id,
                 events=[following],
                 language=language,
                 extended_description=(
@@ -286,6 +299,7 @@ def build_present_following(
         )
 
     return sections
+
 
 def split_events_into_sections(
     events: list[EITEvent],
@@ -312,6 +326,13 @@ def split_events_into_sections(
     current_size = 0
 
     for event in events:
+
+        # Una fuente EPG puede entregar programas con duración
+        # cero o negativa. No permitimos que un único evento
+        # inválido interrumpa la generación completa del
+        # EIT Schedule.
+        if event.stop_time <= event.start_time:
+            continue
 
         encoded = build_event(
             event,
@@ -355,12 +376,14 @@ def build_schedule(
     language: str = "spa",
     extended_description: bool = True,
     table_versions: dict[int, int] | None = None,
+    table_id_base: int = EIT_ACTUAL_SCHEDULE_FIRST,
 ) -> list[bytes]:
     """
-    Construye EIT Schedule Actual TS.
+    Construye EIT Schedule Actual TS u Other TS.
 
     table_id:
-        0x50 .. 0x5F
+        0x50 .. 0x5F para Actual TS
+        0x60 .. 0x6F para Other TS
 
     Cada table_id:
         4 días
@@ -374,6 +397,14 @@ def build_schedule(
     Cada segmento:
         hasta 8 secciones
     """
+
+    if table_id_base not in (
+        EIT_ACTUAL_SCHEDULE_FIRST,
+        EIT_OTHER_SCHEDULE_FIRST,
+    ):
+        raise ValueError(
+            "table_id_base Schedule debe ser 0x50 o 0x60"
+        )
 
     if not events:
         return []
@@ -445,7 +476,7 @@ def build_schedule(
         return []
 
     last_table_id = (
-        0x50 + max_table_index
+        table_id_base + max_table_index
     )
 
     # -------------------------------------------------
@@ -517,7 +548,7 @@ def build_schedule(
     ):
 
         table_id = (
-            0x50 + table_index
+            table_id_base + table_index
         )
 
         last_segment_index = max(

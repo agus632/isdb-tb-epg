@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from app.database import Base, engine
 from app.web.routes import router
 from app.isdb.manager import eit_manager
+from app.epg.scheduler import epg_scheduler
 
 
 Base.metadata.create_all(bind=engine)
@@ -16,10 +17,16 @@ async def lifespan(app: FastAPI):
     # Start all configured EIT broadcasters.
     eit_manager.start()
 
+    # Start automatic EPG source updates.
+    epg_scheduler.start()
+
     try:
         yield
 
     finally:
+        # Stop EPG scheduler before shutting down broadcasters.
+        epg_scheduler.stop()
+
         # Clean shutdown of all EIT broadcasters.
         eit_manager.stop()
 

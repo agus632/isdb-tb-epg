@@ -23,6 +23,11 @@ from app.models import (
     ISDBTransportStream,
     ISDBService,
     ISDBEventID,
+    ISDBEPGGroup,
+    ISDBEPGGroupMember,
+    ISDBSDTGlobalConfig,
+    ISDBSDTConfig,
+    ISDBSDTService,
 )
 from app.isdb.generator import generate_mux_eit
 
@@ -110,6 +115,8 @@ def add_manual_source(
         source_type="manual",
         url="manual://",
         update_interval=24,
+        manual_days=days,
+        manual_block_hours=block_hours,
         enabled=True,
     )
 
@@ -160,12 +167,67 @@ def delete_source(
 ):
     source = db.get(EPGSource, source_id)
 
-    if source:
+    if not source:
+        return RedirectResponse(
+            url="/sources",
+            status_code=303,
+        )
+
+    # Protect EPG sources that are still mapped to ISDB services.
+    #
+    # Check both references:
+    #   1. isdb_services.epg_source_id
+    #   2. isdb_services.epg_channel_id -> epg_channels.source_id
+    #
+    # This validation is intentionally done in the application because
+    # existing SQLite databases may not have foreign-key enforcement enabled.
+    mapped_service = (
+        db.query(ISDBService.id)
+        .outerjoin(
+            EPGChannel,
+            ISDBService.epg_channel_id == EPGChannel.id,
+        )
+        .filter(
+            or_(
+                ISDBService.epg_source_id == source_id,
+                EPGChannel.source_id == source_id,
+            )
+        )
+        .first()
+    )
+
+    if mapped_service:
+        return RedirectResponse(
+            url="/sources?delete_error=in_use",
+            status_code=303,
+        )
+
+    try:
+        # Programmes are not part of the EPGSource ORM cascade,
+        # so remove them explicitly before deleting the source.
+        db.query(EPGProgramme).filter(
+            EPGProgramme.source_id == source_id
+        ).delete(synchronize_session=False)
+
+        # EPGChannel rows are removed by the EPGSource.channels
+        # delete-orphan cascade.
         db.delete(source)
         db.commit()
 
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Error deleting EPG source %s",
+            source_id,
+        )
+
+        return RedirectResponse(
+            url="/sources?delete_error=database",
+            status_code=303,
+        )
+
     return RedirectResponse(
-        url="/sources",
+        url="/sources?deleted=1",
         status_code=303,
     )
 @router.post("/sources/{source_id}/update")
@@ -181,8 +243,8 @@ def update_source(
                 regenerate_manual_epg(
                     source,
                     db,
-                    days=8,
-                    block_hours=6,
+                    days=source.manual_days or 8,
+                    block_hours=source.manual_block_hours or 6,
                 )
             else:
                 import_xmltv(source, db)
@@ -386,6 +448,1020 @@ def delete_isdb_network(
 
     return RedirectResponse(
         url="/isdb",
+        status_code=303,
+    )
+
+
+
+# =========================================================
+# EPG / EIT GROUPS
+# =========================================================
+
+@router.get("/isdb/epg-groups")
+def isdb_epg_groups(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    groups = (
+        db.query(ISDBEPGGroup)
+        .order_by(ISDBEPGGroup.name)
+        .all()
+    )
+
+    muxes = (
+        db.query(ISDBTransportStream)
+        .order_by(
+            ISDBTransportStream.network_id_fk,
+            ISDBTransportStream.transport_stream_id,
+        )
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="isdb_epg_groups.html",
+        context={
+            "groups": groups,
+            "muxes": muxes,
+        },
+    )
+
+
+@router.post("/isdb/epg-groups/add")
+def add_isdb_epg_group(
+    name: str = Form(...),
+    mux_ids: list[int] = Form(default=[]),
+    db: Session = Depends(get_db),
+):
+    name = name.strip()
+
+    if not name:
+        return RedirectResponse(
+            url="/isdb/epg-groups?error=name",
+            status_code=303,
+        )
+
+    existing_name = (
+        db.query(ISDBEPGGroup)
+        .filter(ISDBEPGGroup.name == name)
+        .first()
+    )
+
+    if existing_name is not None:
+        return RedirectResponse(
+            url="/isdb/epg-groups?error=duplicate_name",
+            status_code=303,
+        )
+
+    selected_mux_ids = set(mux_ids)
+
+    if selected_mux_ids:
+        already_assigned = (
+            db.query(ISDBEPGGroupMember)
+            .filter(
+                ISDBEPGGroupMember.transport_stream_id_fk.in_(
+                    selected_mux_ids
+                )
+            )
+            .first()
+        )
+
+        if already_assigned is not None:
+            return RedirectResponse(
+                url="/isdb/epg-groups?error=mux_assigned",
+                status_code=303,
+            )
+
+    group = ISDBEPGGroup(
+        name=name,
+        enabled=True,
+    )
+
+    db.add(group)
+
+    try:
+        db.flush()
+
+        for mux_id in sorted(selected_mux_ids):
+            mux = db.get(
+                ISDBTransportStream,
+                mux_id,
+            )
+
+            if mux is None:
+                continue
+
+            db.add(
+                ISDBEPGGroupMember(
+                    group_id=group.id,
+                    transport_stream_id_fk=mux.id,
+                )
+            )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Error creating EPG/EIT Group"
+        )
+
+        return RedirectResponse(
+            url="/isdb/epg-groups?error=database",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url="/isdb/epg-groups",
+        status_code=303,
+    )
+
+
+@router.get("/isdb/epg-groups/{group_id}")
+def isdb_epg_group_detail(
+    group_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    group = db.get(
+        ISDBEPGGroup,
+        group_id,
+    )
+
+    if group is None:
+        return RedirectResponse(
+            url="/isdb/epg-groups",
+            status_code=303,
+        )
+
+    muxes = (
+        db.query(ISDBTransportStream)
+        .order_by(
+            ISDBTransportStream.network_id_fk,
+            ISDBTransportStream.transport_stream_id,
+        )
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="isdb_epg_group_detail.html",
+        context={
+            "group": group,
+            "muxes": muxes,
+        },
+    )
+
+
+@router.post("/isdb/epg-groups/{group_id}/edit")
+def edit_isdb_epg_group(
+    group_id: int,
+    name: str = Form(...),
+    mux_ids: list[int] = Form(default=[]),
+    db: Session = Depends(get_db),
+):
+    group = db.get(
+        ISDBEPGGroup,
+        group_id,
+    )
+
+    if group is None:
+        return RedirectResponse(
+            url="/isdb/epg-groups",
+            status_code=303,
+        )
+
+    name = name.strip()
+
+    if not name:
+        return RedirectResponse(
+            url="/isdb/epg-groups?error=name",
+            status_code=303,
+        )
+
+    duplicate_name = (
+        db.query(ISDBEPGGroup)
+        .filter(
+            ISDBEPGGroup.name == name,
+            ISDBEPGGroup.id != group.id,
+        )
+        .first()
+    )
+
+    if duplicate_name is not None:
+        return RedirectResponse(
+            url="/isdb/epg-groups?error=duplicate_name",
+            status_code=303,
+        )
+
+    selected_mux_ids = set(mux_ids)
+
+    if selected_mux_ids:
+        conflicting_member = (
+            db.query(ISDBEPGGroupMember)
+            .filter(
+                ISDBEPGGroupMember.transport_stream_id_fk.in_(
+                    selected_mux_ids
+                ),
+                ISDBEPGGroupMember.group_id != group.id,
+            )
+            .first()
+        )
+
+        if conflicting_member is not None:
+            return RedirectResponse(
+                url="/isdb/epg-groups?error=mux_assigned",
+                status_code=303,
+            )
+
+    try:
+        group.name = name
+
+        (
+            db.query(ISDBEPGGroupMember)
+            .filter(
+                ISDBEPGGroupMember.group_id
+                == group.id
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        for mux_id in sorted(selected_mux_ids):
+            mux = db.get(
+                ISDBTransportStream,
+                mux_id,
+            )
+
+            if mux is None:
+                continue
+
+            db.add(
+                ISDBEPGGroupMember(
+                    group_id=group.id,
+                    transport_stream_id_fk=mux.id,
+                )
+            )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+
+        logger.exception(
+            "Error updating EPG/EIT Group %s",
+            group_id,
+        )
+
+        return RedirectResponse(
+            url="/isdb/epg-groups?error=database",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/isdb/epg-groups/{group_id}",
+        status_code=303,
+    )
+
+
+@router.post("/isdb/epg-groups/{group_id}/toggle")
+def toggle_isdb_epg_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+):
+    group = db.get(
+        ISDBEPGGroup,
+        group_id,
+    )
+
+    if group is not None:
+        group.enabled = not group.enabled
+        db.commit()
+
+    return RedirectResponse(
+        url=f"/isdb/epg-groups/{group_id}",
+        status_code=303,
+    )
+
+
+@router.post("/isdb/epg-groups/{group_id}/delete")
+def delete_isdb_epg_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+):
+    group = db.get(
+        ISDBEPGGroup,
+        group_id,
+    )
+
+    if group is not None:
+        db.delete(group)
+        db.commit()
+
+    return RedirectResponse(
+        url="/isdb/epg-groups",
+        status_code=303,
+    )
+
+
+# =========================================================
+# SDT
+# =========================================================
+
+@router.get("/isdb/sdt/global")
+def isdb_sdt_global(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    config = db.query(ISDBSDTGlobalConfig).first()
+
+    if config is None:
+        config = ISDBSDTGlobalConfig(
+            default_provider_name="",
+            default_service_type=1,
+            default_running_status="running",
+            default_free_ca_mode=False,
+            default_eit_present_following=True,
+            default_eit_schedule=True,
+            default_service_enabled=True,
+        )
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="isdb_sdt_global.html",
+        context={
+            "config": config,
+        },
+    )
+
+
+@router.post("/isdb/sdt/global")
+def isdb_sdt_global_save(
+    default_provider_name: str = Form(""),
+    default_service_type: str = Form("1"),
+    default_running_status: str = Form("running"),
+    default_free_ca_mode: str | None = Form(None),
+    default_eit_present_following: str | None = Form(None),
+    default_eit_schedule: str | None = Form(None),
+    default_service_enabled: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    config = db.query(ISDBSDTGlobalConfig).first()
+
+    if config is None:
+        config = ISDBSDTGlobalConfig()
+        db.add(config)
+
+    if len(default_provider_name) > 255:
+        raise HTTPException(
+            status_code=400,
+            detail="default_provider_name is too long",
+        )
+
+    try:
+        parsed_service_type = int(default_service_type, 10)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid default_service_type",
+        )
+
+    if not 0 <= parsed_service_type <= 0xFF:
+        raise HTTPException(
+            status_code=400,
+            detail="default_service_type must be between 0 and 255",
+        )
+
+    valid_running_status = {
+        "undefined",
+        "not-running",
+        "starts-soon",
+        "pausing",
+        "running",
+        "off-air",
+    }
+
+    if default_running_status not in valid_running_status:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid default_running_status",
+        )
+
+    # Do not strip provider_name.
+    config.default_provider_name = default_provider_name
+    config.default_service_type = parsed_service_type
+    config.default_running_status = default_running_status
+    config.default_free_ca_mode = (
+        default_free_ca_mode is not None
+    )
+    config.default_eit_present_following = (
+        default_eit_present_following is not None
+    )
+    config.default_eit_schedule = (
+        default_eit_schedule is not None
+    )
+    config.default_service_enabled = (
+        default_service_enabled is not None
+    )
+
+    db.commit()
+
+    return RedirectResponse(
+        url="/isdb/sdt/global",
+        status_code=303,
+    )
+
+
+@router.get("/isdb/sdt")
+def isdb_sdt(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    configs = (
+        db.query(ISDBSDTConfig)
+        .join(ISDBSDTConfig.transport_stream)
+        .order_by(ISDBTransportStream.transport_stream_id)
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="isdb_sdt.html",
+        context={
+            "configs": configs,
+        },
+    )
+
+
+@router.get("/isdb/sdt/new")
+def isdb_sdt_new(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    used_mux_ids = {
+        row[0]
+        for row in (
+            db.query(ISDBSDTConfig.transport_stream_id_fk)
+            .all()
+        )
+    }
+
+    available_muxes = (
+        db.query(ISDBTransportStream)
+        .filter(
+            ~ISDBTransportStream.id.in_(used_mux_ids)
+        )
+        .order_by(ISDBTransportStream.transport_stream_id)
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="isdb_sdt_new.html",
+        context={
+            "available_muxes": available_muxes,
+        },
+    )
+
+
+@router.post("/isdb/sdt/new")
+def isdb_sdt_create(
+    transport_stream_id_fk: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    mux = db.get(
+        ISDBTransportStream,
+        transport_stream_id_fk,
+    )
+
+    if not mux:
+        raise HTTPException(
+            status_code=404,
+            detail="Transport Stream not found",
+        )
+
+    existing = (
+        db.query(ISDBSDTConfig)
+        .filter(
+            ISDBSDTConfig.transport_stream_id_fk == mux.id
+        )
+        .first()
+    )
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Selected Transport Stream already has "
+                "an SDT configuration"
+            ),
+        )
+
+    config = ISDBSDTConfig(
+        transport_stream_id_fk=mux.id,
+        enabled=False,
+        version=0,
+        output_mode="none",
+        output_address="239.255.1.1",
+        output_port=5100,
+        output_ttl=1,
+        output_interface="",
+    )
+
+    db.add(config)
+    db.commit()
+    db.refresh(config)
+
+    return RedirectResponse(
+        url=f"/isdb/sdt/{config.id}",
+        status_code=303,
+    )
+
+
+@router.post("/isdb/sdt/{config_id}/toggle")
+def isdb_sdt_toggle(
+    config_id: int,
+    db: Session = Depends(get_db),
+):
+    config = db.get(ISDBSDTConfig, config_id)
+
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="SDT configuration not found",
+        )
+
+    config.enabled = not config.enabled
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/isdb/sdt/{config.id}",
+        status_code=303,
+    )
+
+
+@router.post("/isdb/sdt/{config_id}/link")
+def isdb_sdt_link_mux(
+    config_id: int,
+    transport_stream_id_fk: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    config = db.get(ISDBSDTConfig, config_id)
+
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="SDT configuration not found",
+        )
+
+    mux = db.get(
+        ISDBTransportStream,
+        transport_stream_id_fk,
+    )
+
+    if not mux:
+        raise HTTPException(
+            status_code=404,
+            detail="Transport Stream not found",
+        )
+
+    conflict = (
+        db.query(ISDBSDTConfig)
+        .filter(
+            ISDBSDTConfig.transport_stream_id_fk == mux.id,
+            ISDBSDTConfig.id != config.id,
+        )
+        .first()
+    )
+
+    if conflict:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Selected Transport Stream already has "
+                "an SDT configuration"
+            ),
+        )
+
+    if config.transport_stream_id_fk != mux.id:
+        config.transport_stream_id_fk = mux.id
+
+        # The generated SDT identity changes because TSID/ONID
+        # are obtained from the linked MUX.
+        config.version = (config.version + 1) % 32
+
+        db.commit()
+
+    return RedirectResponse(
+        url=f"/isdb/sdt/{config.id}",
+        status_code=303,
+    )
+
+
+@router.get("/isdb/sdt/{config_id}")
+def isdb_sdt_detail(
+    config_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    config = db.get(ISDBSDTConfig, config_id)
+
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="SDT configuration not found",
+        )
+
+    mux = config.transport_stream
+
+    services = (
+        db.query(ISDBSDTService)
+        .filter(
+            ISDBSDTService.sdt_config_id_fk == config.id
+        )
+        .order_by(ISDBSDTService.service_id)
+        .all()
+    )
+
+    used_mux_ids = {
+        row[0]
+        for row in (
+            db.query(ISDBSDTConfig.transport_stream_id_fk)
+            .filter(ISDBSDTConfig.id != config.id)
+            .all()
+        )
+    }
+
+    available_muxes = (
+        db.query(ISDBTransportStream)
+        .filter(
+            ~ISDBTransportStream.id.in_(used_mux_ids)
+        )
+        .order_by(ISDBTransportStream.transport_stream_id)
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="isdb_sdt_detail.html",
+        context={
+            "config": config,
+            "mux": mux,
+            "network": mux.network,
+            "services": services,
+            "available_muxes": available_muxes,
+        },
+    )
+
+
+@router.get("/isdb/sdt/{config_id}/service/add")
+def add_sdt_service_page(
+    config_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    config = db.get(ISDBSDTConfig, config_id)
+
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="SDT config not found",
+        )
+
+    mux = config.transport_stream
+
+    global_config = db.query(ISDBSDTGlobalConfig).first()
+
+    if global_config is None:
+        global_config = ISDBSDTGlobalConfig(
+            default_provider_name="",
+            default_service_type=1,
+            default_running_status="running",
+            default_free_ca_mode=False,
+            default_eit_present_following=True,
+            default_eit_schedule=True,
+            default_service_enabled=True,
+        )
+        db.add(global_config)
+        db.commit()
+        db.refresh(global_config)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="isdb_sdt_service_add.html",
+        context={
+            "config": config,
+            "mux": mux,
+            "network": mux.network,
+            "global_config": global_config,
+        },
+    )
+
+
+@router.post("/isdb/sdt/{config_id}/service/add")
+def add_sdt_service(
+    config_id: int,
+    service_id: str = Form(...),
+    service_name: str = Form(...),
+    provider_name: str = Form(""),
+    service_type: str = Form("1"),
+    running_status: str = Form("running"),
+    free_ca_mode: str | None = Form(None),
+    eit_present_following: str | None = Form(None),
+    eit_schedule: str | None = Form(None),
+    enabled: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    config = db.get(ISDBSDTConfig, config_id)
+
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="SDT config not found",
+        )
+
+    try:
+        parsed_service_id = int(service_id, 10)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid service_id",
+        )
+
+    if not 0 <= parsed_service_id <= 0xFFFF:
+        raise HTTPException(
+            status_code=400,
+            detail="service_id must be between 0 and 65535",
+        )
+
+    duplicate = (
+        db.query(ISDBSDTService)
+        .filter(
+            ISDBSDTService.sdt_config_id_fk == config.id,
+            ISDBSDTService.service_id == parsed_service_id,
+        )
+        .first()
+    )
+
+    if duplicate:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"service_id {parsed_service_id} already exists "
+                "in this SDT"
+            ),
+        )
+
+    if len(service_name) > 255:
+        raise HTTPException(
+            status_code=400,
+            detail="service_name is too long",
+        )
+
+    if len(provider_name) > 255:
+        raise HTTPException(
+            status_code=400,
+            detail="provider_name is too long",
+        )
+
+    try:
+        parsed_service_type = int(service_type, 0)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid service_type",
+        )
+
+    if not 0 <= parsed_service_type <= 0xFF:
+        raise HTTPException(
+            status_code=400,
+            detail="service_type must be between 0 and 255",
+        )
+
+    valid_running_status = {
+        "undefined",
+        "not-running",
+        "starts-soon",
+        "pausing",
+        "running",
+        "off-air",
+    }
+
+    if running_status not in valid_running_status:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid running_status",
+        )
+
+    service = ISDBSDTService(
+        sdt_config_id_fk=config.id,
+        service_id=parsed_service_id,
+        service_name=service_name,
+        provider_name=provider_name,
+        service_type=parsed_service_type,
+        running_status=running_status,
+        free_ca_mode=free_ca_mode is not None,
+        eit_present_following=eit_present_following is not None,
+        eit_schedule=eit_schedule is not None,
+        enabled=enabled is not None,
+    )
+
+    db.add(service)
+
+    # Any SDT content change gets a new 5-bit version.
+    config.version = (config.version + 1) % 32
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/isdb/sdt/{config.id}",
+        status_code=303,
+    )
+
+
+@router.post("/isdb/sdt/service/{service_id}/delete")
+def delete_sdt_service(
+    service_id: int,
+    db: Session = Depends(get_db),
+):
+    service = db.get(ISDBSDTService, service_id)
+
+    if not service:
+        raise HTTPException(
+            status_code=404,
+            detail="SDT service not found",
+        )
+
+    config = service.sdt_config
+    config_id = config.id
+
+    db.delete(service)
+
+    # SDT version_number is 5 bits: 0..31.
+    config.version = (config.version + 1) % 32
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/isdb/sdt/{config_id}",
+        status_code=303,
+    )
+
+
+@router.get("/isdb/sdt/service/{service_id}/edit")
+def edit_sdt_service_page(
+    service_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    service = db.get(ISDBSDTService, service_id)
+
+    if not service:
+        raise HTTPException(
+            status_code=404,
+            detail="SDT service not found",
+        )
+
+    config = service.sdt_config
+    mux = config.transport_stream
+
+    return templates.TemplateResponse(
+        request=request,
+        name="isdb_sdt_service_edit.html",
+        context={
+            "service": service,
+            "config": config,
+            "mux": mux,
+            "network": mux.network,
+        },
+    )
+
+
+@router.post("/isdb/sdt/service/{service_id}/edit")
+def edit_sdt_service(
+    service_id: int,
+    sdt_service_id: str = Form(..., alias="service_id"),
+    service_name: str = Form(...),
+    provider_name: str = Form(""),
+    service_type: str = Form(...),
+    running_status: str = Form(...),
+    free_ca_mode: str | None = Form(None),
+    eit_present_following: str | None = Form(None),
+    eit_schedule: str | None = Form(None),
+    enabled: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    service = db.get(ISDBSDTService, service_id)
+
+    if not service:
+        raise HTTPException(
+            status_code=404,
+            detail="SDT service not found",
+        )
+
+    config = service.sdt_config
+
+    try:
+        parsed_service_id = int(sdt_service_id, 0)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid service_id",
+        )
+
+    if not 0 <= parsed_service_id <= 0xFFFF:
+        raise HTTPException(
+            status_code=400,
+            detail="service_id must be between 0x0000 and 0xFFFF",
+        )
+
+    duplicate = (
+        db.query(ISDBSDTService)
+        .filter(
+            ISDBSDTService.sdt_config_id_fk == config.id,
+            ISDBSDTService.service_id == parsed_service_id,
+            ISDBSDTService.id != service.id,
+        )
+        .first()
+    )
+
+    if duplicate:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"service_id {parsed_service_id} already exists "
+                "in this SDT"
+            ),
+        )
+
+    # Do not strip service_name/provider_name:
+    # imported SDT strings must remain under explicit operator control.
+    if len(service_name) > 255:
+        raise HTTPException(
+            status_code=400,
+            detail="service_name is too long",
+        )
+
+    if len(provider_name) > 255:
+        raise HTTPException(
+            status_code=400,
+            detail="provider_name is too long",
+        )
+
+    try:
+        parsed_service_type = int(service_type, 0)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid service_type",
+        )
+
+    if not 0 <= parsed_service_type <= 0xFF:
+        raise HTTPException(
+            status_code=400,
+            detail="service_type must be between 0x00 and 0xFF",
+        )
+
+    valid_running_status = {
+        "undefined",
+        "not-running",
+        "starts-soon",
+        "pausing",
+        "running",
+        "off-air",
+    }
+
+    if running_status not in valid_running_status:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid running_status",
+        )
+
+    service.service_id = parsed_service_id
+    service.service_name = service_name
+    service.provider_name = provider_name
+    service.service_type = parsed_service_type
+    service.running_status = running_status
+
+    service.free_ca_mode = free_ca_mode is not None
+    service.eit_present_following = (
+        eit_present_following is not None
+    )
+    service.eit_schedule = eit_schedule is not None
+    service.enabled = enabled is not None
+
+    # SDT version_number is 5 bits: 0..31.
+    config.version = (config.version + 1) % 32
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/isdb/sdt/{config.id}",
         status_code=303,
     )
 

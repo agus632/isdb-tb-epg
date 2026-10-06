@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Configuración global SDT</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/style.css"
+    >
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>ISDB-Tb EPG</h2>
+
+    <a href="/">Dashboard</a>
+    <a href="/sources">Fuentes EPG</a>
+
+    <hr>
+
+    <a href="/channels">Canales</a>
+    <a href="/map">Mapeo</a>
+    <a href="/program">Programación</a>
+    <a href="/isdb">ISDB-Tb</a>
+    <a href="/isdb/epg-groups">EPG/EIT Groups</a>
+    <a href="/isdb/sdt">SDT</a>
+
+</div>
+
+
+<div class="content">
+
+    <a
+        class="back-link"
+        href="/isdb/sdt"
+    >
+        ← Volver a SDT
+    </a>
+
+
+    <h1>Configuración global SDT</h1>
+
+    <p>
+        Estos valores se utilizarán como predeterminados
+        al crear nuevos servicios SDT.
+        No modifican los servicios existentes.
+    </p>
+
+
+    <div class="panel">
+
+        <form
+            method="post"
+            action="/isdb/sdt/global"
+        >
+
+            <label>Proveedor por defecto</label>
+
+            <input
+                type="text"
+                name="default_provider_name"
+                maxlength="255"
+                value="{{ config.default_provider_name }}"
+            >
+
+
+            <label>Service type por defecto</label>
+
+            <input
+                type="number"
+                name="default_service_type"
+                min="0"
+                max="255"
+                value="{{ config.default_service_type }}"
+                required
+            >
+
+
+            <label>Running status por defecto</label>
+
+            <select name="default_running_status">
+
+                {% for value, label in [
+                    ("undefined", "Undefined"),
+                    ("not-running", "Not running"),
+                    ("starts-soon", "Starts soon"),
+                    ("pausing", "Pausing"),
+                    ("running", "Running"),
+                    ("off-air", "Off-air")
+                ] %}
+
+                    <option
+                        value="{{ value }}"
+                        {% if config.default_running_status == value %}
+                            selected
+                        {% endif %}
+                    >
+                        {{ label }}
+                    </option>
+
+                {% endfor %}
+
+            </select>
+
+
+            <div class="checkbox-group">
+
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        name="default_free_ca_mode"
+                        {% if config.default_free_ca_mode %}
+                            checked
+                        {% endif %}
+                    >
+                    Free CA mode
+                </label>
+
+
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        name="default_eit_present_following"
+                        {% if config.default_eit_present_following %}
+                            checked
+                        {% endif %}
+                    >
+                    EIT Present / Following
+                </label>
+
+
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        name="default_eit_schedule"
+                        {% if config.default_eit_schedule %}
+                            checked
+                        {% endif %}
+                    >
+                    EIT Schedule
+                </label>
+
+
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        name="default_service_enabled"
+                        {% if config.default_service_enabled %}
+                            checked
+                        {% endif %}
+                    >
+                    Servicio habilitado en SDT
+                </label>
+
+            </div>
+
+
+            <div class="actions">
+
+                <button type="submit">
+                    Guardar configuración
+                </button>
+
+                <a
+                    class="button-link secondary"
+                    href="/isdb/sdt"
+                >
+                    Cancelar
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+</body>
+</html>

@@ -32,6 +32,8 @@
     <a href="/map">Mapeo</a>
     <a href="/program">Programación</a>
     <a href="/isdb">ISDB-Tb</a>
+    <a href="/isdb/epg-groups">EPG/EIT Groups</a>
+    <a href="/isdb/sdt">SDT</a>
 
 </div>
 
@@ -48,6 +50,19 @@
         Administrá las fuentes XMLTV utilizadas para obtener
         la programación de los canales.
     </p>
+
+    {% if request.query_params.get("delete_error") == "in_use" %}
+    <div class="error-box">
+        <strong>No se puede eliminar la fuente EPG.</strong>
+        Está asociada a uno o más servicios ISDB-Tb.
+        Desasociá los servicios antes de eliminarla.
+    </div>
+    {% elif request.query_params.get("delete_error") == "database" %}
+    <div class="error-box">
+        <strong>No se pudo eliminar la fuente EPG.</strong>
+        Ocurrió un error de base de datos y la operación fue revertida.
+    </div>
+    {% endif %}
 
 
     <!-- ================================================= -->
